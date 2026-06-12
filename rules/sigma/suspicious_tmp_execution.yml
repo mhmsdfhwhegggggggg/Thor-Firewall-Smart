@@ -1,0 +1,35 @@
+title: Suspicious Process Execution from Temp Directory
+id: a5e24a99-1b0a-4c4f-9e34-12345example
+status: experimental
+description: Detects execution of binaries from temporary directories (common malware behavior)
+level: high
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    filename|contains:
+      - '/tmp/'
+      - '/dev/shm/'
+      - '/run/user/'
+      - '/.cache/'
+    keywords:
+      - 'chmod +x'
+      - 'wget'
+      - 'curl'
+      - 'nc -e'
+      - 'bash -i'
+      - '/bin/sh -i'
+      - 'python -c'
+      - 'perl -e'
+  condition: selection
+tags:
+  - attack.execution
+  - attack.t1059
+  - attack.defense_evasion
+  - attack.t1036
+falsepositives:
+  - Legitimate software installers
+  - Development tools (add to allowlist)
+references:
+  - https://attack.mitre.org/techniques/T1059/
