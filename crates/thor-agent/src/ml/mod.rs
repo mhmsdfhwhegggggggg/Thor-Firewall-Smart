@@ -3,13 +3,15 @@ pub mod inference; // الكود السابق ل UEBA
 pub mod gnn_detector; 
 pub mod llm_reporter; 
 pub mod ja4_analyzer;
+pub mod l7_analyzer;
 
 use anyhow::Result; 
 use std::sync::Arc; 
 use tracing::info; 
 use self::gnn_detector::GnnChainDetector; 
 use self::inference::MlEngine; 
-use self::llm_reporter::LlmReporter; 
+use self::llm_reporter::LlmReporter;
+use self::l7_analyzer::L7Analyzer;
 
 pub struct ThorAiCore { 
     pub ueba: Option<Arc<MlEngine>>, 
