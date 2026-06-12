@@ -27,7 +27,42 @@ pub struct XdpDropEvent {
     pub timestamp_ns: u64,
 }
 
-pub struct EbpfManager {
+use crate::ml::onnx_scorer::OnnxScorer;
+
+pub struct EventProcessor {
+    scorer: Arc<OnnxScorer>,
+    // ... قنوات إرسال إلى SIEM أو SOAR
+}
+
+impl EventProcessor {
+    pub fn new(scorer: Arc<OnnxScorer>) -> Self {
+        Self { scorer }
+    }
+
+    pub async fn process_xdp_event(&self, event: XdpDropEvent) {
+        // 1. التقييم الفوري بالذكاء الاصطناعي
+        match self.scorer.score_event(&event).await {
+            Ok(result) => {
+                if result.is_anomaly {
+                    tracing::warn!(
+                        "🚨 AI ANOMALY DETECTED! Score: {:.4} | SrcIP: {:?} | DstPort: {}",
+                        result.anomaly_score,
+                        event.src_ip,
+                        event.dst_port
+                    );
+                    
+                    // 2. هنا يتم استدعاء SOAR لعزل المصدر أو تحديث قائمة الحظر ديناميكياً
+                    // self.soar_engine.block_ip(event.src_ip).await;
+                }
+            }
+            Err(e) => {
+                tracing::error!("ONNX Scoring failed for event: {}", e);
+                // Fallback: الاعتماد على القواعد التقليدية (Sigma/YARA)
+            }
+        }
+    }
+}
+
     bpf: Arc<Ebpf>,
 }
 
