@@ -1,0 +1,23 @@
+[package]
+name = "thor-bpf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+aya = { workspace = true }
+aya-log = { version = "0.2" }
+anyhow = { workspace = true }
+bytes = { workspace = true }
+ipnetwork = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+libc = { workspace = true }
+
+thor-common = { path = "../thor-common" }
+
+[lib]
+name = "thor_bpf"
+
+[build-dependencies]
+# Nothing special — eBPF C files compiled by build.rs using clang
