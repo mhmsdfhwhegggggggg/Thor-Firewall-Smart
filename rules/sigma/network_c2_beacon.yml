@@ -1,0 +1,26 @@
+title: Outbound Connection to High Port (Potential C2 Beacon)
+id: b7f35c12-2d4b-4e8f-a912-98765example
+status: experimental
+description: Detects outbound TCP connections to high ports often used by C2 frameworks (Cobalt Strike, Metasploit, etc.)
+level: medium
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  selection:
+    dst_port|gte: 49152
+    dst_port|lte: 65535
+    protocol: tcp
+  filter_legitimate:
+    comm|contains:
+      - 'ssh'
+      - 'sshd'
+      - 'chrome'
+      - 'firefox'
+  condition: selection and not filter_legitimate
+tags:
+  - attack.command_and_control
+  - attack.t1071
+falsepositives:
+  - Legitimate applications using ephemeral ports
+  - Game clients
