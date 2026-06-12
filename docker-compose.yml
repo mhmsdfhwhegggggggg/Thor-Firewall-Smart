@@ -1,0 +1,132 @@
+version: "3.9"
+
+services:
+  # ─── Thor Agent ────────────────────────────────────────────────────────────
+  thor-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: thor-firewall-smart:latest
+    container_name: thor-agent
+    privileged: true  # Required for eBPF/XDP + namespaces
+    network_mode: host  # Required for XDP to attach to real interfaces
+    pid: host           # Required for process forensics via /proc
+    volumes:
+      - ./rules:/app/rules:ro
+      - ./models:/app/models:ro
+      - thor-quarantine:/var/lib/thor/quarantine
+      - thor-forensics:/var/lib/thor/forensics
+      - /sys/fs/bpf:/sys/fs/bpf  # BPF filesystem
+    environment:
+      - THOR_INTERFACE=${THOR_INTERFACE:-eth0}
+      - THOR_API_ADDR=0.0.0.0:8080
+      - THOR_SIGMA_DIR=/app/rules/sigma
+      - THOR_YARA_DIR=/app/rules/yara
+      - THOR_MODEL=/app/models/thor_ueba_model.onnx
+      - THEHIVE_URL=${THEHIVE_URL:-}
+      - RUST_LOG=${RUST_LOG:-info,aya=warn}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      thehive:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - SYS_PTRACE
+      - SYS_RAWIO
+      - BPF
+      - PERFMON
+
+  # ─── TheHive (SOAR Case Management) ────────────────────────────────────────
+  thehive:
+    image: strangebee/thehive:5.3
+    container_name: thehive
+    depends_on:
+      - cassandra
+      - elasticsearch
+    environment:
+      - JVM_OPTS=-Xms512m -Xmx2g
+      - TH_CASSANDRA_HOSTNAME=cassandra
+      - TH_ELASTICSEARCH_HOSTNAME=elasticsearch
+    ports:
+      - "9000:9000"
+    volumes:
+      - thehive-data:/opt/thehive/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    profiles: ["thehive"]
+
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    environment:
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=256M
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    profiles: ["thehive"]
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx1g
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    profiles: ["thehive"]
+
+  # ─── Grafana + Prometheus (Optional Metrics) ────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"
+    profiles: ["monitoring"]
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=thor123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    profiles: ["monitoring"]
+
+volumes:
+  thor-quarantine:
+  thor-forensics:
+  thehive-data:
+  cassandra-data:
+  elasticsearch-data:
+  grafana-data:
