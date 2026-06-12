@@ -56,6 +56,9 @@ uuid = { version = "1.8", features = ["v4"] }
 config = { version = "0.14", features = ["yaml"] }
 clap = { version = "4.5", features = ["derive", "env"] }
 tls-parser = "0.11"
+jsonwebtoken = "9.3"
+sled = "0.34"
+sysinfo = "0.30"
 
 [build-dependencies]
 # Nothing extra

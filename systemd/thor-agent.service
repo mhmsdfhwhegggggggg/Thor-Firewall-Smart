@@ -1,0 +1,26 @@
+[Unit]
+Description=Thor Firewall Smart Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/thor-agent --config /etc/thor/config.toml
+Restart=on-failure
+RestartSec=5
+
+# 🔒 Resource Limiting (cgroups v2) - منع Thor من أن يصبح DoS Vector
+CPUQuota=5%          # لا يتجاوز 5% من نواة واحدة
+MemoryMax=256M       # حد أقصى صارم للذاكرة
+MemorySwapMax=0      # منع استخدام Swap (لضمان الأداء)
+IOWeight=100         # أولوية منخفضة في عمليات القرص مقارنة بالتطبيقات الأساسية
+
+# 🔒 Security Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/log/thor /var/lib/thor
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_ADMIN
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_ADMIN
+
+[Install]
+WantedBy=multi-user.target
