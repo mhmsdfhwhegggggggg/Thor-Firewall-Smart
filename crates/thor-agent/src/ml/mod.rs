@@ -4,6 +4,7 @@ pub mod gnn_detector;
 pub mod llm_reporter; 
 pub mod ja4_analyzer;
 pub mod l7_analyzer;
+pub mod onnx_scorer;
 
 use anyhow::Result; 
 use std::sync::Arc; 
