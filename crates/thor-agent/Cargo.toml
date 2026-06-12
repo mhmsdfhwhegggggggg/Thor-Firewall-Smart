@@ -62,6 +62,9 @@ sysinfo = "0.30"
 tonic = { version = "0.11", features = ["tls", "transport"] }
 tokio-rustls = "0.25"
 rustls = { version = "0.22", features = ["ring"] }
+aya = "0.12"
+aya-log = "0.2"
+bytes = "1.5"
 
 [build-dependencies]
 # Nothing extra
