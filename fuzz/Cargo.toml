@@ -18,3 +18,9 @@ name = "parse_l7_payload"
 path = "fuzz_targets/parse_l7_payload.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "parse_ssl_payload"
+path = "fuzz_targets/parse_ssl_payload.rs"
+test = false
+doc = false
