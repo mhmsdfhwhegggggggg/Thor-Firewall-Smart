@@ -2,6 +2,7 @@ pub mod features;
 pub mod inference; // الكود السابق ل UEBA
 pub mod gnn_detector; 
 pub mod llm_reporter; 
+pub mod ja4_analyzer;
 
 use anyhow::Result; 
 use std::sync::Arc; 
