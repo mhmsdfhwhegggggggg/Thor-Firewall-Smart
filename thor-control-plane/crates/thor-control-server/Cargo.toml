@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tonic = "0.11"
+tonic = { version = "0.11", features = ["tls", "transport"] }
 prost = "0.12"
 tokio = { version = "1.37", features = ["full", "rt-multi-thread"] }
 tokio-stream = "0.1"
+tokio-rustls = "0.25"
+rustls = { version = "0.22", features = ["ring"] }
+axum = "0.7"
+jsonwebtoken = "9.3"
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "json"] }
 dashmap = "5.5"
 anyhow = "1.0"

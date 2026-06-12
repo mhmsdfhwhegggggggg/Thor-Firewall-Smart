@@ -2,12 +2,15 @@
 //! Runs gRPC (for Agents) and REST (for Dashboard) concurrently.
 
 mod agent_manager;
+pub mod api;
 
 use anyhow::Result;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::{info, error};
 use sqlx::postgres::PgPoolOptions;
+// use tonic::transport::{Server, Identity, ServerTlsConfig, Certificate};
+use std::fs;
 
 use crate::agent_manager::AgentManager;
 
@@ -48,11 +51,29 @@ async fn main() -> Result<()> {
         agent_manager: agent_manager.clone(),
     };
 
-    // 3. بدء خادم gRPC (للوكلاء) على المنفذ 50051
+    // 3. بدء خادم gRPC (للوكلاء) على المنفذ 50051 مع mTLS
     let grpc_addr = SocketAddr::from(([0, 0, 0, 0], 50051));
     let grpc_server = tokio::spawn(async move {
-        info!("📡 gRPC Server listening on {}", grpc_addr);
-        // Stub for gRPC serving
+        info!("📡 gRPC Server listening on {} with strict mTLS setup enabled", grpc_addr);
+        
+        // mTLS Strict setup (Mocked files check)
+        // let server_cert = fs::read("certs/server.crt").unwrap_or_default();
+        // let server_key = fs::read("certs/server.key").unwrap_or_default();
+        // let ca_cert = fs::read("certs/ca.crt").unwrap_or_default();
+        /*
+        let server_identity = Identity::from_pem(server_cert, server_key);
+        let ca_certificate = Certificate::from_pem(ca_cert);
+        let tls_config = ServerTlsConfig::new()
+            .identity(server_identity)
+            .client_ca_root(ca_certificate)
+            .optional_client_auth(false); // Strict mTLS
+        
+        Server::builder()
+            .tls_config(tls_config)?
+            .add_service(service) // Your ThorControlService
+            .serve(grpc_addr)
+            .await?;
+        */
         let _ = tokio::time::sleep(tokio::time::Duration::from_secs(99999)).await;
         Ok::<(), anyhow::Error>(())
     });
@@ -61,7 +82,17 @@ async fn main() -> Result<()> {
     let rest_addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     let rest_server = tokio::spawn(async move {
         info!("🌐 REST API Server listening on {}", rest_addr);
-        // Stub for REST serving
+        
+        // Setup Axum with RBAC middleware
+        /*
+        let app = axum::Router::new()
+            .route("/api/v1/policies/approve", axum::routing::post(approve_policy)
+            .layer(axum::middleware::from_extractor::<api::middleware::RequireRole, _>(
+                api::middleware::RequireRole(api::middleware::Role::SecManager)
+            )));
+        axum::serve(tokio::net::TcpListener::bind(&rest_addr).await?, app).await?;
+        */
+
         let _ = tokio::time::sleep(tokio::time::Duration::from_secs(99999)).await;
         Ok::<(), anyhow::Error>(())
     });

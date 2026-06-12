@@ -59,6 +59,9 @@ tls-parser = "0.11"
 jsonwebtoken = "9.3"
 sled = "0.34"
 sysinfo = "0.30"
+tonic = { version = "0.11", features = ["tls", "transport"] }
+tokio-rustls = "0.25"
+rustls = { version = "0.22", features = ["ring"] }
 
 [build-dependencies]
 # Nothing extra

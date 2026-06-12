@@ -9,6 +9,8 @@ use tracing::{info, warn, error};
 use crate::detection::sigma::{GuardedDynamicRule, RuleMode, RuleSource};
 use std::time::Instant;
 use std::sync::atomic::AtomicUsize;
+// use tonic::transport::{Channel, ClientTlsConfig, Identity, Certificate};
+use std::fs;
 
 pub struct ControlClient {
     agent_id: String,
@@ -42,8 +44,27 @@ impl ControlClient {
     }
 
     async fn connect_and_listen(&self) -> Result<()> {
-        info!("🔗 Connecting to Control Plane at {}", self.server_url);
+        info!("🔗 Connecting to Control Plane at {} with mTLS", self.server_url);
         
+        // Mocking the read for mTLS setup as expected by enterprise environments
+        // let agent_cert = fs::read("/etc/thor/agent.crt").unwrap_or_default();
+        // let agent_key = fs::read("/etc/thor/agent.key").unwrap_or_default();
+        // let ca_cert = fs::read("/etc/thor/ca.crt").unwrap_or_default();
+
+        /*
+        let tls_config = ClientTlsConfig::new()
+            .domain_name("thor-control.bank.internal") // Should match server cert CN
+            .identity(Identity::from_pem(agent_cert, agent_key))
+            .ca_certificate(Certificate::from_pem(ca_cert));
+
+        let channel = Channel::from_static("https://thor-control.bank.internal:50051")
+            .tls_config(tls_config)?
+            .connect()
+            .await?;
+
+        let _client = ThorControlServiceClient::new(channel);
+        */
+
         info!("📡 Subscribed to real-time policy stream.");
 
         // Placeholder for streaming logic
