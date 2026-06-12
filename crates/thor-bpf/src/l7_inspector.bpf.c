@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
-#include "vmlinux.h"
+// Placeholder for vmlinux.h or necessary linux headers
+#include <linux/types.h>
+#include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 
 #define TASK_COMM_LEN 16
-#define MAX_PAYLOAD_LEN 512 // We sample the beginning to detect patterns like SQLi or XSS
+#define MAX_PAYLOAD_LEN 512 // nأخذ عينة من البداية لكشف أنماط مثل SQLi أو XSS
 
 struct l7_event {
     __u32 pid;
