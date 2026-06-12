@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package thor.control.v1;
+
+// ==========================================
+// خدمة إدارة الوكلاء والسياسات
+// ==========================================
+service ThorControlService {
+    // 1. تسجيل وكيل جديد والحصول على توكن مصادقة
+    rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+    
+    // 2. بث السياسات والقواعد للوكيل بشكل لحظي (Server-to-Client Streaming)
+    rpc StreamPolicies(StreamPoliciesRequest) returns (stream PolicyUpdate);
+    
+    // 3. إرسال الحوادث من الوكيل إلى الخادم المركزي
+    rpc ReportIncident(IncidentReport) returns (IncidentAck);
+    
+    // 4. نبضات الحياة (Heartbeat) لمراقبة صحة الأسطول
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+// --- الرسائل (Messages) ---
+
+message RegisterAgentRequest {
+    string agent_id = 1;
+    string hostname = 2;
+    string os_version = 3;
+    string thor_version = 4;
+    string ip_address = 5;
+    map<string, string> metadata = 6;
+}
+
+message RegisterAgentResponse {
+    string agent_token = 1;  // JWT صالح لمدة سنة
+    int64 current_policy_version = 2;
+}
+
+message StreamPoliciesRequest {
+    string agent_id = 1;
+    string agent_token = 2;
+    int64 last_known_policy_version = 3;
+}
+
+message PolicyUpdate {
+    int64 version = 1;
+    string policy_type = 2;      // "sigma", "yara", "ioc", "config"
+    string rule_id = 3;          // معرف القاعدة الفريد
+    string content = 4;          // محتوى YAML/JSON
+    string action = 5;           // "CREATE", "UPDATE", "DELETE"
+    string enforcement_mode = 6; // "ENFORCE" أو "SHADOW" (لأمان الذكاء الاصطناعي)
+}
+
+message IncidentReport {
+    string incident_id = 1;
+    string agent_id = 2;
+    string severity = 3;         // "CRITICAL", "HIGH", "MEDIUM", "LOW"
+    string description = 4;
+    repeated string matched_rules = 5;
+    repeated string actions_taken = 6; // e.g., "ISOLATED", "QUARANTINED"
+    int64 timestamp = 7;
+    map<string, string> context = 8;
+}
+
+message IncidentAck {
+    bool accepted = 1;
+    string message = 2;
+}
+
+message HeartbeatRequest {
+    string agent_id = 1;
+    string agent_token = 2;
+    AgentMetrics metrics = 3;
+}
+
+message AgentMetrics {
+    uint64 uptime_seconds = 1;
+    uint64 events_processed = 2;
+    uint64 threats_detected = 3;
+    double cpu_usage_percent = 4;
+    uint64 memory_usage_mb = 5;
+    bool is_degraded = 6;
+}
+
+message HeartbeatResponse {
+    bool is_healthy = 1;
+    string message = 2;
+}
