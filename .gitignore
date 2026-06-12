@@ -1,0 +1,36 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# eBPF compiled objects
+**/*.bpf.o
+**/*.bpf.ll
+*_skel.rs
+
+# ONNX models (large binaries — distribute separately)
+*.onnx
+
+# Runtime data
+/var/lib/thor/
+*.quarantine
+forensic_*.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.key
+*.pem
+*.crt
+
+# Logs
+*.log
