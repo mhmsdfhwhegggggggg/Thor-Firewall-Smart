@@ -1,0 +1,107 @@
+name: Thor Firewall Smart CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: Typecheck & Lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install eBPF build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm libbpf-dev linux-headers-$(uname -r) lld libyara-dev
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (non-BPF crates)
+        run: |
+          cargo clippy --workspace \
+            --exclude thor-bpf-kern \
+            -- -D warnings \
+               -A clippy::not_unsafe_ptr_arg_deref \
+               -A dead_code
+
+      - name: Typecheck all crates
+        run: cargo check --workspace --all-targets
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-22.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm libbpf-dev linux-headers-$(uname -r) lld libyara-dev
+
+      - name: Run tests
+        run: cargo test --workspace --lib -- --nocapture
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-22.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-release:
+    name: Release Build
+    runs-on: ubuntu-22.04
+    needs: [check, test]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm libbpf-dev linux-headers-$(uname -r) lld libyara-dev
+
+      - name: Build release binary
+        run: cargo build --release --bin thor-agent
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: thor-agent-linux-x86_64
+          path: target/release/thor-agent
+          if-no-files-found: error
