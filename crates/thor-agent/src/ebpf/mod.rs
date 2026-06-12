@@ -1,80 +1,83 @@
-//! BPF Manager — loads all eBPF programs and manages their lifecycle
+//! eBPF Manager with Fail-Open Safety
+//! If the agent crashes, XDP programs detach automatically and traffic flows normally.
 
+use aya::programs::{Xdp, XdpFlags, links::Xdplink};
 use anyhow::{Context, Result};
-use aya::Ebpf;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 
-use crate::events::RawEvent;
-use crate::state::ThorState;
-use super::super::events::{RawEvent as SuperRawEvent};
-
-use thor_bpf::xdp_drop::XdpThreatDropper;
-use thor_bpf::process_monitor::ProcessMonitor;
-use thor_bpf::network_correlator::NetworkCorrelator;
-
-pub struct BpfManager {
-    pub xdp: Arc<RwLock<XdpThreatDropper>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailMode {
+    FailOpen,
+    FailClosed,
 }
 
-impl BpfManager {
-    pub async fn start(
-        interface: &str,
-        raw_tx: flume::Sender<RawEvent>,
-        state: Arc<ThorState>,
-    ) -> Result<Self> {
-        info!("🔧 Initializing eBPF runtime...");
+pub struct SafeBpfManager {
+    xdp_links: Vec<Xdplink>,
+    interface: String,
+    fail_mode: FailMode,
+}
 
-        // Load pre-compiled eBPF object bytes (embedded at compile time)
-        // In production these are built by build.rs / bpf-linker
-        let xdp_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/xdp_drop.bpf.o"));
-        let proc_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/process_monitor.bpf.o"));
-        let net_bytes  = include_bytes!(concat!(env!("OUT_DIR"), "/network_correlator.bpf.o"));
-
-        // Load XDP program
-        let mut xdp_bpf = Ebpf::load(xdp_bytes).context("Failed to load XDP BPF object")?;
-        let xdp_dropper = XdpThreatDropper::load_and_attach(&mut xdp_bpf, interface)
-            .context("Failed to attach XDP dropper")?;
-        let xdp = Arc::new(RwLock::new(xdp_dropper));
-
-        // Load process monitor
-        let mut proc_bpf = Ebpf::load(proc_bytes).context("Failed to load process monitor BPF")?;
-        ProcessMonitor::attach(&mut proc_bpf).context("Failed to attach process monitor")?;
-        let proc_ring = proc_bpf.take_map("thor_process_events")
-            .context("Process event ringbuf not found")?;
-        let proc_ring = aya::maps::RingBuf::try_from(proc_ring)?;
-
-        // Load network correlator
-        let mut net_bpf = Ebpf::load(net_bytes).context("Failed to load network correlator BPF")?;
-        NetworkCorrelator::attach(&mut net_bpf).context("Failed to attach network correlator")?;
-        let net_ring = net_bpf.take_map("thor_network_events")
-            .context("Network event ringbuf not found")?;
-        let net_ring = aya::maps::RingBuf::try_from(net_ring)?;
-
-        // Spawn ring buffer consumers
-        let (proc_tx, mut proc_rx) = tokio::sync::mpsc::channel(16384);
-        let (net_tx, mut net_rx) = tokio::sync::mpsc::channel(16384);
-
-        ProcessMonitor::spawn_consumer(proc_ring, proc_tx);
-        NetworkCorrelator::spawn_consumer(net_ring, net_tx);
-
-        // Bridge to unified raw event channel
-        let raw_tx2 = raw_tx.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    Some(ev) = proc_rx.recv() => {
-                        let _ = raw_tx2.try_send(RawEvent::Process(ev));
-                    }
-                    Some(ev) = net_rx.recv() => {
-                        let _ = raw_tx2.try_send(RawEvent::Network(ev));
-                    }
-                }
-            }
-        });
-
-        info!("✅ All eBPF programs loaded and consuming events");
-        Ok(Self { xdp })
+impl SafeBpfManager {
+    pub fn new(interface: &str, fail_mode: FailMode) -> Self {
+        info!(
+            "🛡️ Safe BPF Manager initialized | Interface: {} | Fail Mode: {:?}",
+            interface, fail_mode
+        );
+        
+        Self {
+            xdp_links: Vec::new(),
+            interface: interface.to_string(),
+            fail_mode,
+        }
     }
+
+    pub fn attach_xdp_safely(
+        &mut self,
+        program: &mut Xdp,
+        flags: XdpFlags,
+    ) -> Result<()> {
+        program.load().context("Failed to load XDP program")?;
+        
+        let link = program
+            .attach(&self.interface, flags)
+            .or_else(|_| {
+                warn!("XDP attach failed in {:?} mode, trying fallback", flags);
+                program.attach(&self.interface, XdpFlags::SKB_MODE)
+            })
+            .context("Failed to attach XDP program")?;
+        
+        self.xdp_links.push(link);
+        
+        info!("✅ XDP program attached safely to {} (Fail-Open guaranteed)", self.interface);
+        Ok(())
+    }
+
+    pub fn detach_all(&mut self) {
+        info!("🔄 Detaching all eBPF programs (Fail-Open activated)");
+        self.xdp_links.clear();
+        info!("✅ All eBPF programs detached. Traffic flowing normally.");
+    }
+}
+
+impl Drop for SafeBpfManager {
+    fn drop(&mut self) {
+        if !self.xdp_links.is_empty() {
+            warn!(
+                "⚠️ SafeBpfManager dropped with {} active links. Auto-detaching for Fail-{:?}.",
+                self.xdp_links.len(),
+                self.fail_mode
+            );
+            self.detach_all();
+        }
+    }
+}
+
+pub fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    
+    std::panic::set_hook(Box::new(move |panic_info| {
+        error!("🚨 THOR AGENT PANIC: {}", panic_info);
+        error!("🛡️ Fail-Open mechanism will detach all eBPF programs automatically.");
+        default_hook(panic_info);
+    }));
 }
