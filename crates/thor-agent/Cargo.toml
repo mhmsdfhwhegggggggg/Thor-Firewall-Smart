@@ -1,0 +1,63 @@
+[package]
+name = "thor-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "thor-agent"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace deps
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+chrono = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+dashmap = { workspace = true }
+flume = { workspace = true }
+crossbeam = { workspace = true }
+parking_lot = { workspace = true }
+aya = { workspace = true }
+ort = { workspace = true }
+ndarray = { workspace = true }
+ipnetwork = { workspace = true }
+bytes = { workspace = true }
+ahocorasick = { workspace = true }
+yara = { workspace = true }
+bloomfilter = { workspace = true }
+walkdir = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+futures = { workspace = true }
+nix = { workspace = true }
+sha2 = { workspace = true }
+rayon = { workspace = true }
+num_cpus = { workspace = true }
+libc = { workspace = true }
+
+# Workspace crates
+thor-common = { path = "../thor-common", features = ["serde"] }
+thor-bpf = { path = "../thor-bpf" }
+
+# Additional agent-only deps
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+hex = "0.4"
+regex = "1.10"
+uuid = { version = "1.8", features = ["v4"] }
+config = { version = "0.14", features = ["yaml"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+
+[build-dependencies]
+# Nothing extra
+
+[profile.release]
+inherits = "release"
