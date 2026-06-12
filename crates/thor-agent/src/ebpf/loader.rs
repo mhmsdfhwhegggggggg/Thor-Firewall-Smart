@@ -113,9 +113,12 @@ impl EbpfManager {
             };
 
             info!("👂 Listening to XDP Ring Buffer...");
+            let mut drop_count = 0;
+            let mut survival_mode = false;
+
             loop {
-                // القراءة غير المتزامنة (تعود فوراً إذا لم تكن هناك بيانات)
-                match ring_buf.read(-1) {
+                // القراءة غير المتزامنة (مع مهلة قصيرة للتعامل مع الـ Backpressure)
+                match ring_buf.read(100) { // Timeout 100ms
                     Ok(events) => {
                         for event_data in events {
                             if event_data.len() < std::mem::size_of::<XdpDropEvent>() {
@@ -127,11 +130,25 @@ impl EbpfManager {
                                 std::ptr::read(event_data.as_ptr() as *const XdpDropEvent)
                             };
 
-                            // إرسال الحدث لمحرك المعالجة (Detection/SIEM)
-                            if tx.send(event).await.is_err() {
-                                warn!("Channel closed, stopping XDP listener");
-                                break;
+                            // إذا كنا في وضع النجاة، نتجاوز معالجة AI ونكتفي بالـ XDP
+                            if !survival_mode {
+                                // إرسال الحدث لمحرك المعالجة (Detection/SIEM)
+                                if tx.send(event).await.is_err() {
+                                    warn!("Channel closed, stopping XDP listener");
+                                    break;
+                                }
                             }
+                        }
+                    }
+                    Err(e) if e.raw_os_error() == Some(libc::ENOBUFS) => {
+                        // ⚠️ RingBuffer Overflow detected!
+                        drop_count += 1;
+                        tracing::warn!("🚨 RingBuffer Overflow! Drops: {}", drop_count);
+                        
+                        if drop_count > 100 && !survival_mode {
+                            tracing::error!("Activating SURVIVAL MODE: Disabling AI scoring to save CPU.");
+                            // تعطيل إرسال البيانات لـ ONNX مؤقتاً، والاعتماد فقط على XDP Drop الصامت
+                            survival_mode = true;
                         }
                     }
                     Err(e) => {
