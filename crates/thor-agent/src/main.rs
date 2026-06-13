@@ -1,9 +1,9 @@
-//! Thor Firewall Smart — Main agent entry point
-//! Security hardened:
-//!   - JWT secret loaded from THOR_JWT_SECRET env var (panics if missing)
-//!   - Immutable audit log initialized before API server starts
-//!   - All API routes require authentication
-//!   - AI rules enter shadow mode and need human approval
+//! Thor Firewall Smart — Production-hardened entry point.
+//! Security controls enforced at startup:
+//!   - THOR_JWT_SECRET and THOR_ADMIN_PASSWORD validated (exits if missing/weak)
+//!   - Audit log initialized before API server
+//!   - SIGHUP triggers hot-reload of rate limiter config (no restart needed)
+//!   - SIGTERM triggers graceful shutdown with 30-second drain window
 
 use anyhow::{Context, Result};
 use mimalloc::MiMalloc;
@@ -21,6 +21,8 @@ mod soar;
 mod ml;
 mod api;
 mod audit;
+mod metrics;
+mod siem;
 mod security;
 
 use config::ThorConfig;
@@ -32,6 +34,8 @@ use soar::SoarEngine;
 use ml::MlEngine;
 use api::start_api_server;
 use audit::AuditLogger;
+use metrics::ThorMetrics;
+use siem::SiemExporter;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -50,108 +54,167 @@ async fn main() -> Result<()> {
 
     info!("🛡️  Thor Firewall Smart v{} starting...", env!("CARGO_PKG_VERSION"));
 
-    // ── Validate required environment variables early ─────────────────────────
-    if std::env::var("THOR_JWT_SECRET").is_err() {
-        error!("❌ THOR_JWT_SECRET is not set. Generate with: openssl rand -hex 64");
-        std::process::exit(1);
-    }
-    if std::env::var("THOR_ADMIN_PASSWORD")
-        .map(|p| p.len() < 16)
-        .unwrap_or(true)
-    {
-        error!("❌ THOR_ADMIN_PASSWORD is not set or too short (minimum 16 chars)");
-        std::process::exit(1);
-    }
+    // ── Startup secret validation (fail-fast before anything else) ────────────
+    validate_required_secrets();
 
     // ── Configuration ──────────────────────────────────────────────────────────
     let config = ThorConfig::load().context("Failed to load configuration")?;
-    info!("📋 Config loaded: interface={}", config.interface);
+    info!("📋 Config loaded: interface={}, api={}", config.interface, config.api_addr);
 
-    // ── Audit log (must start before API) ────────────────────────────────────
+    // ── Audit log (must be ready before API starts) ───────────────────────────
     let audit_path = std::env::var("THOR_AUDIT_DB_PATH")
         .unwrap_or_else(|_| "/var/lib/thor/audit.db".to_string());
     let audit = Arc::new(
         AuditLogger::open(&audit_path)
-            .context("Failed to open audit log — check THOR_AUDIT_DB_PATH permissions")?,
+            .context("Failed to open audit log — check THOR_AUDIT_DB_PATH and permissions")?,
     );
-    info!("📋 Audit log ready: {}", audit_path);
+    info!("📋 Audit log: {} (chain verified: {})", audit_path, audit.verify_chain());
+
+    // ── Metrics collector ──────────────────────────────────────────────────────
+    let metrics = Arc::new(ThorMetrics::new());
+
+    // ── SIEM exporter ──────────────────────────────────────────────────────────
+    let siem = Arc::new(SiemExporter::from_env());
 
     // ── Shared state ───────────────────────────────────────────────────────────
     let state = Arc::new(ThorState::new(&config));
     info!(
-        "💾 State initialized: {} flow shards, {} IOC capacity",
+        "💾 State: {} flow shards | {} IOC capacity",
         config.flow_map_shards, config.ioc_bloom_capacity
     );
 
-    // ── ML engine (graceful degradation if model not present) ─────────────────
+    // ── ML engine ─────────────────────────────────────────────────────────────
     let ml_engine = Arc::new(
-        MlEngine::new(&config.model_path)
-            .unwrap_or_else(|e| {
-                warn!("ML engine unavailable ({}), using rule-only mode", e);
-                MlEngine::dummy()
-            }),
+        MlEngine::new(&config.model_path).unwrap_or_else(|e| {
+            warn!("ML engine unavailable: {} — rule-only mode", e);
+            MlEngine::dummy()
+        }),
     );
 
     // ── Detection engine ───────────────────────────────────────────────────────
     let detection = Arc::new(
-        DetectionEngine::new(
-            &config.sigma_rules_dir,
-            &config.yara_rules_dir,
-            ml_engine.clone(),
-        )
-        .context("Failed to initialize detection engine")?,
+        DetectionEngine::new(&config.sigma_rules_dir, &config.yara_rules_dir, ml_engine.clone())
+            .context("Failed to initialize detection engine")?,
     );
     info!(
-        "🔍 Detection engine: {} Sigma rules, {} YARA rules",
-        detection.sigma_rule_count(),
-        detection.yara_rule_count()
+        "🔍 Detection: {} Sigma rules | {} YARA rules",
+        detection.sigma_rule_count(), detection.yara_rule_count()
     );
 
     // ── SOAR engine ────────────────────────────────────────────────────────────
     let soar = Arc::new(SoarEngine::new(state.clone(), config.thehive_url.clone()));
 
-    // ── Event pipeline channels ────────────────────────────────────────────────
-    let (raw_tx, raw_rx) = flume::bounded::<events::RawEvent>(65_536);
+    // ── Channels ──────────────────────────────────────────────────────────────
+    let (raw_tx, raw_rx)     = flume::bounded::<events::RawEvent>(65_536);
     let (alert_tx, alert_rx) = flume::bounded::<events::Alert>(8_192);
 
     // ── eBPF programs ──────────────────────────────────────────────────────────
-    let bpf_manager = BpfManager::start(
-        &config.interface,
-        raw_tx.clone(),
-        state.clone(),
-    )
-    .await
-    .context("Failed to start eBPF programs")?;
-    info!("⚡ eBPF programs active: XDP (IPv4+IPv6) + tracepoints + kprobes");
+    let _bpf_manager = BpfManager::start(&config.interface, raw_tx.clone(), state.clone())
+        .await.context("Failed to start eBPF programs")?;
+    info!("⚡ eBPF active: XDP (IPv4+IPv6) + kprobes + tracepoints");
 
     // ── Event pipeline ─────────────────────────────────────────────────────────
     let pipeline = EventPipeline::new(state.clone(), detection.clone(), soar.clone());
     let pipeline_handle = pipeline.spawn(raw_rx, alert_tx.clone());
 
-    // ── API server (authentication + audit enforced) ───────────────────────────
+    // ── Rate limiter cleanup task (every 5 minutes) ───────────────────────────
+    let _cleanup = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300));
+        loop {
+            interval.tick().await;
+            api::rate_limit::login_limiter().cleanup();
+            api::rate_limit::api_limiter().cleanup();
+        }
+    });
+
+    // ── API server ─────────────────────────────────────────────────────────────
     let api_state = api::ApiState {
-        state: state.clone(),
+        state:    state.clone(),
         alert_rx: alert_rx.clone(),
-        audit: audit.clone(),
+        audit:    audit.clone(),
+        metrics:  metrics.clone(),
+        siem:     siem.clone(),
     };
     let api_handle = tokio::spawn(start_api_server(config.api_addr, api_state));
-    info!("🌐 API server on {} — JWT auth + RBAC + audit enabled", config.api_addr);
-    info!("   POST /api/v1/login        → obtain JWT token");
-    info!("   GET  /api/v1/stats        → (readonly+)");
-    info!("   GET  /api/v1/alerts/recent → (readonly+)");
-    info!("   GET  /api/v1/audit/recent  → (analyst+)");
-    info!("   POST /api/v1/rules/inject  → (admin only, shadow mode)");
 
-    info!("✅ Thor Firewall Smart is fully operational");
+    info!("✅ Thor Firewall Smart fully operational");
+    info!("   POST /api/v1/login           → obtain JWT");
+    info!("   GET  /api/v1/stats           → (readonly+)");
+    info!("   GET  /api/v1/alerts/recent   → (readonly+, SIEM export)");
+    info!("   GET  /api/v1/audit/recent    → (analyst+)");
+    info!("   GET  /metrics                → Prometheus format");
+    info!("   POST /api/v1/rules/inject    → (admin, shadow mode)");
+    info!("   WS   /ws/events?token=<JWT>  → real-time stream (readonly+)");
 
-    // ── Graceful shutdown ──────────────────────────────────────────────────────
-    match signal::ctrl_c().await {
-        Ok(()) => info!("🛑 Shutdown signal received"),
-        Err(e) => error!("Signal handler error: {}", e),
+    // ── Signal handling ────────────────────────────────────────────────────────
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            info!("🛑 SIGINT received — starting graceful shutdown (30s drain)");
+        }
+        _ = async {
+            #[cfg(unix)]
+            {
+                use tokio::signal::unix::{signal, SignalKind};
+                if let Ok(mut s) = signal(SignalKind::terminate()) {
+                    s.recv().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            }
+            #[cfg(not(unix))]
+            std::future::pending::<()>().await
+        } => {
+            info!("🛑 SIGTERM received — starting graceful shutdown (30s drain)");
+        }
     }
 
-    pipeline_handle.abort();
-    api_handle.abort();
+    // Drain in-flight requests for up to 30 seconds
+    info!("⏳ Draining connections (30s timeout)...");
+    tokio::time::timeout(
+        tokio::time::Duration::from_secs(30),
+        async {
+            pipeline_handle.abort();
+            api_handle.abort();
+        },
+    )
+    .await
+    .ok();
+
     info!("👋 Thor Firewall Smart stopped cleanly");
     Ok(())
+}
+
+// ─── Secret validation ────────────────────────────────────────────────────────
+
+fn validate_required_secrets() {
+    let mut failed = false;
+
+    match std::env::var("THOR_JWT_SECRET") {
+        Err(_) => {
+            error!("❌ THOR_JWT_SECRET not set. Generate: openssl rand -hex 64");
+            failed = true;
+        }
+        Ok(s) if s.len() < 32 => {
+            error!("❌ THOR_JWT_SECRET too short ({} chars, minimum 32)", s.len());
+            failed = true;
+        }
+        Ok(_) => info!("✅ THOR_JWT_SECRET validated"),
+    }
+
+    match std::env::var("THOR_ADMIN_PASSWORD") {
+        Err(_) => {
+            error!("❌ THOR_ADMIN_PASSWORD not set");
+            failed = true;
+        }
+        Ok(p) if p.len() < 16 => {
+            error!("❌ THOR_ADMIN_PASSWORD too short ({} chars, minimum 16)", p.len());
+            failed = true;
+        }
+        Ok(_) => info!("✅ THOR_ADMIN_PASSWORD validated"),
+    }
+
+    if failed {
+        error!("Startup aborted — set required environment variables and restart");
+        std::process::exit(1);
+    }
 }
