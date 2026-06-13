@@ -26,11 +26,16 @@ forensic_*.json
 .DS_Store
 Thumbs.db
 
-# Secrets
+# Secrets — NEVER commit these files
 .env
 *.key
 *.pem
 *.crt
+secrets/
+certs/
+
+# Audit database (sensitive)
+*.db
 
 # Logs
 *.log
