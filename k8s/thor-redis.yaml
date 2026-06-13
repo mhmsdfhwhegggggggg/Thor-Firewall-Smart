@@ -1,0 +1,126 @@
+---
+# ─── Redis Sentinel — 3-node HA (1 master + 2 replicas + 3 sentinels) ─────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: thor-firewall
+spec:
+  serviceName: redis
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      initContainers:
+        - name: redis-init
+          image: redis:7.2-alpine
+          command:
+            - sh
+            - -c
+            - |
+              # Set role: pod-0 = master, others = replica
+              ORDINAL=$(echo $POD_NAME | rev | cut -d- -f1 | rev)
+              if [ "$ORDINAL" = "0" ]; then
+                echo "role: master" > /data/role
+              else
+                echo "role: replica" > /data/role
+              fi
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          command:
+            - sh
+            - -c
+            - |
+              ORDINAL=$(echo $POD_NAME | rev | cut -d- -f1 | rev)
+              if [ "$ORDINAL" = "0" ]; then
+                redis-server \
+                  --requirepass "$REDIS_PASSWORD" \
+                  --save 60 1 \
+                  --save 300 10 \
+                  --maxmemory 2gb \
+                  --maxmemory-policy allkeys-lru \
+                  --appendonly yes \
+                  --tcp-keepalive 60 \
+                  --bind 0.0.0.0
+              else
+                redis-server \
+                  --requirepass "$REDIS_PASSWORD" \
+                  --masterauth "$REDIS_PASSWORD" \
+                  --replicaof redis-0.redis.thor-firewall.svc.cluster.local 6379 \
+                  --maxmemory 2gb \
+                  --maxmemory-policy allkeys-lru \
+                  --appendonly yes \
+                  --bind 0.0.0.0
+              fi
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: redis-password } }
+          ports:
+            - name: redis
+              containerPort: 6379
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "3Gi"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 20Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: thor-firewall
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+  clusterIP: None
+  type: ClusterIP

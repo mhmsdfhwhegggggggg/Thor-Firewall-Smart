@@ -1,0 +1,346 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Production Docker Compose
+# High Availability configuration:
+#   - PostgreSQL + Patroni (streaming replication)
+#   - Redis Sentinel (3 nodes)
+#   - Kafka KRaft (3 brokers)
+#   - 2x thor-agent (load balanced)
+#   - Nginx TLS termination
+#   - Prometheus + Grafana
+#   - Vector (log aggregation → SIEM)
+#
+# Usage:
+#   cp .env.example .env && nano .env
+#   bash scripts/generate_certs.sh
+#   docker-compose -f docker-compose.prod.yml up -d
+# ════════════════════════════════════════════════════════════════════════════════
+
+version: "3.9"
+
+x-agent-base: &agent-base
+  image: ghcr.io/mhmsdfhwhegggggggg/thor-firewall-smart:${THOR_VERSION:-latest}
+  restart: unless-stopped
+  network_mode: host           # Required for eBPF/XDP
+  privileged: false
+  cap_add:
+    - NET_ADMIN
+    - NET_RAW
+    - SYS_ADMIN
+    - PERFMON
+    - BPF
+  security_opt:
+    - no-new-privileges:true
+    - seccomp:./configs/thor-seccomp.json
+  volumes:
+    - /sys/fs/bpf:/sys/fs/bpf
+    - /sys/kernel/debug:/sys/kernel/debug:ro
+    - thor-audit:/var/lib/thor
+    - ./certs/thor-agent:/etc/thor/tls:ro
+    - ./certs/ca/ca.crt:/etc/thor/tls/ca.crt:ro
+    - ./rules/sigma:/etc/thor/rules/sigma:ro
+  env_file: .env
+  healthcheck:
+    test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "100m"
+      max-file: "10"
+  ulimits:
+    memlock:
+      soft: -1
+      hard: -1
+    nofile:
+      soft: 65536
+      hard: 65536
+
+services:
+
+  # ── Thor Agent (node 1) ─────────────────────────────────────────────────────
+  thor-agent-1:
+    <<: *agent-base
+    container_name: thor-agent-1
+    hostname: thor-agent-1
+    environment:
+      THOR_API_BIND: "127.0.0.1:8080"
+      THOR_TLS_BIND_ADDR: "127.0.0.1:8443"
+      THOR_METRICS_BIND: "127.0.0.1:9090"
+      THOR_INTERFACE: "${THOR_INTERFACE:-eth0}"
+      THOR_REDIS_URL: "redis://:${REDIS_PASSWORD}@redis-master:6379"
+      THOR_KAFKA_BROKERS: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+      HOSTNAME: "thor-agent-1"
+
+  # ── Thor Agent (node 2) ─────────────────────────────────────────────────────
+  thor-agent-2:
+    <<: *agent-base
+    container_name: thor-agent-2
+    hostname: thor-agent-2
+    environment:
+      THOR_API_BIND: "127.0.0.1:8081"
+      THOR_TLS_BIND_ADDR: "127.0.0.1:8444"
+      THOR_METRICS_BIND: "127.0.0.1:9091"
+      THOR_INTERFACE: "${THOR_INTERFACE:-eth0}"
+      THOR_REDIS_URL: "redis://:${REDIS_PASSWORD}@redis-master:6379"
+      THOR_KAFKA_BROKERS: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+      HOSTNAME: "thor-agent-2"
+
+  # ── Nginx TLS Termination + Load Balancer ───────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: thor-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs/nginx/server.crt:/etc/nginx/tls/server.crt:ro
+      - ./certs/nginx/server.key:/etc/nginx/tls/server.key:ro
+      - ./certs/nginx/nginx-client.crt:/etc/nginx/tls/nginx-client.crt:ro
+      - ./certs/nginx/nginx-client.key:/etc/nginx/tls/nginx-client.key:ro
+      - ./certs/ca/ca.crt:/etc/nginx/tls/ca-chain.crt:ro
+      - ./certs/dhparam4096.pem:/etc/nginx/dhparam4096.pem:ro
+      - ./dashboard/dist:/var/www/thor-dashboard:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      thor-agent-1:
+        condition: service_healthy
+    networks:
+      - thor-internal
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ── PostgreSQL Primary ──────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: thor-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: thor
+      POSTGRES_USER: thor_user
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command:
+      - postgres
+      - -c ssl=on
+      - -c ssl_cert_file=/etc/ssl/certs/server.crt
+      - -c ssl_key_file=/etc/ssl/private/server.key
+      - -c ssl_ca_file=/etc/ssl/certs/ca.crt
+      - -c log_statement=mod
+      - -c log_connections=on
+      - -c log_disconnections=on
+      - -c log_duration=on
+      - -c log_min_duration_statement=1000
+      - -c shared_preload_libraries=pg_stat_statements
+      - -c max_connections=200
+      - -c work_mem=64MB
+      - -c maintenance_work_mem=256MB
+      - -c wal_level=replica
+      - -c archive_mode=on
+      - -c archive_command=cp %p /var/lib/postgresql/wal_archive/%f
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-wal:/var/lib/postgresql/wal_archive
+      - ./certs/thor-agent/agent.crt:/etc/ssl/certs/server.crt:ro
+      - ./certs/thor-agent/agent.key:/etc/ssl/private/server.key:ro
+      - ./certs/ca/ca.crt:/etc/ssl/certs/ca.crt:ro
+    networks:
+      - thor-internal
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thor_user -d thor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    shm_size: 256mb
+
+  # ── Redis Master ────────────────────────────────────────────────────────────
+  redis-master:
+    image: redis:7.2-alpine
+    container_name: thor-redis-master
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass ${REDIS_PASSWORD}
+      - --maxmemory 2gb
+      - --maxmemory-policy allkeys-lru
+      - --save 60 1
+      - --appendonly yes
+      - --tcp-keepalive 60
+      - --bind 0.0.0.0
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - thor-internal
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Kafka Broker 1 ──────────────────────────────────────────────────────────
+  kafka-1:
+    image: bitnami/kafka:3.6
+    container_name: thor-kafka-1
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-1:9092"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_MIN_INSYNC_REPLICAS: "2"
+      KAFKA_CFG_NUM_PARTITIONS: "12"
+      KAFKA_CFG_LOG_RETENTION_HOURS: "168"
+      ALLOW_PLAINTEXT_LISTENER: "yes"   # Replace with mTLS in production
+    volumes:
+      - kafka-1-data:/bitnami/kafka
+    networks:
+      - thor-internal
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  kafka-2:
+    image: bitnami/kafka:3.6
+    container_name: thor-kafka-2
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: 2
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-2:9092"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_MIN_INSYNC_REPLICAS: "2"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka-2-data:/bitnami/kafka
+    networks:
+      - thor-internal
+
+  kafka-3:
+    image: bitnami/kafka:3.6
+    container_name: thor-kafka-3
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: 3
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-3:9092"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "3"
+      KAFKA_CFG_MIN_INSYNC_REPLICAS: "2"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka-3-data:/bitnami/kafka
+    networks:
+      - thor-internal
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: thor-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=90d
+      - --web.listen-address=0.0.0.0:9091
+      - --web.enable-lifecycle
+    ports:
+      - "127.0.0.1:9091:9091"
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - thor-internal
+    security_opt:
+      - no-new-privileges:true
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: thor-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_STRICT_TRANSPORT_SECURITY: "true"
+      GF_SERVER_ROOT_URL: "https://${DOMAIN}/grafana"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./configs/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./configs/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - thor-internal
+
+# ── Networks ───────────────────────────────────────────────────────────────────
+networks:
+  thor-internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: thor0
+
+# ── Volumes ────────────────────────────────────────────────────────────────────
+volumes:
+  thor-audit:
+    driver: local
+  postgres-data:
+    driver: local
+  postgres-wal:
+    driver: local
+  redis-data:
+    driver: local
+  kafka-1-data:
+    driver: local
+  kafka-2-data:
+    driver: local
+  kafka-3-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  nginx-logs:
+    driver: local

@@ -1,0 +1,68 @@
+---
+# ─── Namespace ────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: thor-firewall
+  labels:
+    app.kubernetes.io/name: thor-firewall
+    app.kubernetes.io/part-of: thor-security
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+
+---
+# ─── Service Account ──────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: thor-agent
+  namespace: thor-firewall
+  annotations:
+    # AWS EKS: iam.amazonaws.com/role-arn: "arn:aws:iam::ACCT:role/thor-agent"
+    # GKE:     iam.gke.io/gcp-service-account: "thor-agent@PROJECT.iam.gserviceaccount.com"
+automountServiceAccountToken: false
+
+---
+# ─── RBAC: ClusterRole (needs eBPF node access) ───────────────────────────────
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: thor-agent
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "namespaces", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: thor-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: thor-agent
+subjects:
+  - kind: ServiceAccount
+    name: thor-agent
+    namespace: thor-firewall
+
+---
+# ─── PodDisruptionBudget ──────────────────────────────────────────────────────
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: thor-agent-pdb
+  namespace: thor-firewall
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: thor-agent

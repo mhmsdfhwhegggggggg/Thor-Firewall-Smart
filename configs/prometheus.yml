@@ -1,0 +1,84 @@
+# ════════════════════════════════════════════════════════════════════════════════
+# Prometheus Configuration — Thor Firewall Smart
+# Scrapes: thor-agent nodes + Kafka + Redis + Postgres + Node Exporter
+# ════════════════════════════════════════════════════════════════════════════════
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  scrape_timeout:      10s
+  external_labels:
+    cluster: thor-production
+    environment: production
+
+# ── Alerting ──────────────────────────────────────────────────────────────────
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+      timeout: 5s
+
+# ── Rule files ────────────────────────────────────────────────────────────────
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# ── Scrape configs ─────────────────────────────────────────────────────────────
+scrape_configs:
+
+  # Thor Agent — primary metrics
+  - job_name: thor_agent
+    metrics_path: /metrics
+    scheme: http
+    scrape_interval: 10s
+    static_configs:
+      - targets:
+          - localhost:9090
+          - localhost:9091
+        labels:
+          service: thor-agent
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Kafka — JMX exporter
+  - job_name: kafka
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - kafka-1:7071
+          - kafka-2:7071
+          - kafka-3:7071
+        labels:
+          service: kafka
+
+  # Redis — redis_exporter
+  - job_name: redis
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['redis-master:9121']
+        labels:
+          service: redis
+
+  # PostgreSQL — postgres_exporter
+  - job_name: postgres
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['postgres:9187']
+        labels:
+          service: postgres
+
+  # Node Exporter — host metrics
+  - job_name: node
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['localhost:9100']
+        labels:
+          service: node
+
+  # Nginx — nginx-prometheus-exporter
+  - job_name: nginx
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['nginx:9113']
+        labels:
+          service: nginx

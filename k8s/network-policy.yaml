@@ -1,0 +1,190 @@
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# Zero-Trust Network Policies — Thor Firewall Smart
+# Default: deny all ingress and egress. Explicitly allow only required flows.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Default: deny all in thor-firewall namespace ─────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: thor-firewall
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+
+---
+# ─── Thor Agent: allowed ingress ──────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thor-agent-ingress
+  namespace: thor-firewall
+spec:
+  podSelector:
+    matchLabels:
+      app: thor-agent
+  policyTypes: [Ingress]
+  ingress:
+    # Prometheus scraping from monitoring namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 9090
+          protocol: TCP
+    # Ingress controller (NGINX)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8443
+          protocol: TCP
+    # Internal health checks (kubelet)
+    - ports:
+        - port: 8080
+          protocol: TCP
+
+---
+# ─── Thor Agent: allowed egress ───────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thor-agent-egress
+  namespace: thor-firewall
+spec:
+  podSelector:
+    matchLabels:
+      app: thor-agent
+  policyTypes: [Egress]
+  egress:
+    # DNS (CoreDNS)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - port: 5432
+          protocol: TCP
+    # Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - port: 6379
+          protocol: TCP
+    # Kafka
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - port: 9092
+          protocol: TCP
+    # Threat intel feeds (external HTTPS)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+
+---
+# ─── Kafka: isolated networking ───────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-network-policy
+  namespace: thor-firewall
+spec:
+  podSelector:
+    matchLabels:
+      app: kafka
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: thor-agent
+      ports:
+        - port: 9092
+          protocol: TCP
+    # Inter-broker communication
+    - from:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - port: 9092
+          protocol: TCP
+        - port: 9093
+          protocol: TCP
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - port: 9092
+          protocol: TCP
+        - port: 9093
+          protocol: TCP
+    - to: []
+      ports:
+        - port: 53
+          protocol: UDP
+
+---
+# ─── Redis: isolated networking ───────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-network-policy
+  namespace: thor-firewall
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: thor-agent
+      ports:
+        - port: 6379
+          protocol: TCP
+    # Inter-replica replication
+    - from:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - port: 6379
+          protocol: TCP
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - port: 6379
+          protocol: TCP

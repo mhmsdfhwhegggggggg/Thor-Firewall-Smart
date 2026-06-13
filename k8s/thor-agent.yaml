@@ -1,0 +1,292 @@
+---
+# ─── DaemonSet — runs on EVERY node (eBPF requires host network) ──────────────
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: thor-agent
+  namespace: thor-firewall
+  labels:
+    app: thor-agent
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  selector:
+    matchLabels:
+      app: thor-agent
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: thor-agent
+        app.kubernetes.io/version: "0.1.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: thor-agent
+      automountServiceAccountToken: false
+      hostNetwork: true        # Required for eBPF/XDP
+      hostPID: true            # Required for process monitoring
+      dnsPolicy: ClusterFirstWithHostNet
+
+      # ── Security Context ─────────────────────────────────────────────────────
+      securityContext:
+        runAsNonRoot: false    # eBPF requires root (or CAP_NET_ADMIN)
+        seccompProfile:
+          type: Localhost
+          localhostProfile: "thor-bpf-seccomp.json"
+
+      # ── Init: verify secrets and certs ───────────────────────────────────────
+      initContainers:
+        - name: verify-secrets
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Verifying required secrets..."
+              [ -z "$THOR_JWT_SECRET" ]       && echo "MISSING: THOR_JWT_SECRET"       && exit 1
+              [ -z "$THOR_ADMIN_PASSWORD" ]   && echo "MISSING: THOR_ADMIN_PASSWORD"   && exit 1
+              [ -z "$THOR_DB_PASSWORD" ]      && echo "MISSING: THOR_DB_PASSWORD"      && exit 1
+              echo "All secrets present."
+          env:
+            - name: THOR_JWT_SECRET
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: jwt-secret } }
+            - name: THOR_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: admin-password } }
+            - name: THOR_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: db-password } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+
+      containers:
+        - name: thor-agent
+          image: ghcr.io/mhmsdfhwhegggggggg/thor-firewall-smart:latest
+          imagePullPolicy: Always
+
+          ports:
+            - name: api
+              containerPort: 8080
+              protocol: TCP
+            - name: api-tls
+              containerPort: 8443
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+
+          # ── Resource limits ──────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+              ephemeral-storage: "1Gi"
+            limits:
+              cpu: "4000m"
+              memory: "4Gi"
+              ephemeral-storage: "10Gi"
+
+          # ── Security context ─────────────────────────────────────────────────
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN          # XDP/eBPF
+                - NET_RAW            # Raw packet access
+                - SYS_ADMIN          # BPF map creation
+                - PERFMON            # perf_event (eBPF)
+                - BPF                # BPF syscall
+              drop:
+                - ALL
+            privileged: false        # Avoid full privileged mode
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+
+          # ── Environment ──────────────────────────────────────────────────────
+          env:
+            - name: NODE_NAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+            - name: HOSTNAME
+              valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+            - name: THOR_JWT_SECRET
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: jwt-secret } }
+            - name: THOR_ADMIN_USERNAME
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: admin-username } }
+            - name: THOR_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: admin-password } }
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: database-url } }
+            - name: THOR_REDIS_URL
+              valueFrom: { secretKeyRef: { name: thor-secrets, key: redis-url } }
+            - name: THOR_KAFKA_BROKERS
+              valueFrom: { configMapKeyRef: { name: thor-config, key: kafka-brokers } }
+            - name: THOR_SIEM_ENDPOINT
+              valueFrom: { configMapKeyRef: { name: thor-config, key: siem-endpoint, optional: true } }
+            - name: THOR_GEO_BLOCK_COUNTRIES
+              valueFrom: { configMapKeyRef: { name: thor-config, key: geo-block-countries, optional: true } }
+            - name: THOR_RATE_LOGIN_RPM
+              value: "10"
+            - name: THOR_RATE_API_RPM
+              value: "600"
+            - name: THOR_JWT_EXPIRY_HOURS
+              value: "8"
+            - name: THOR_INTEL_REFRESH
+              value: "60"
+            - name: RUST_LOG
+              value: "thor_agent=info,aya=warn"
+
+          # ── Volume mounts ────────────────────────────────────────────────────
+          volumeMounts:
+            - name: tls-certs
+              mountPath: /etc/thor/tls
+              readOnly: true
+            - name: bpf-fs
+              mountPath: /sys/fs/bpf
+            - name: debug-fs
+              mountPath: /sys/kernel/debug
+            - name: audit-data
+              mountPath: /var/lib/thor
+            - name: sigma-rules
+              mountPath: /etc/thor/rules/sigma
+              readOnly: true
+            - name: tmp-vol
+              mountPath: /tmp
+
+          # ── Health checks ────────────────────────────────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 20   # 100s total startup time allowed
+
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]  # drain connections
+
+      # ── Volumes ──────────────────────────────────────────────────────────────
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: thor-tls-certs
+            defaultMode: 0400
+        - name: bpf-fs
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
+        - name: debug-fs
+          hostPath:
+            path: /sys/kernel/debug
+            type: Directory
+        - name: audit-data
+          persistentVolumeClaim:
+            claimName: thor-audit-pvc
+        - name: sigma-rules
+          configMap:
+            name: thor-sigma-rules
+        - name: tmp-vol
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+
+      # ── Tolerations (run on all nodes including masters) ──────────────────────
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+        - key: CriticalAddonsOnly
+          operator: Exists
+
+      # ── Priority ─────────────────────────────────────────────────────────────
+      priorityClassName: system-node-critical
+
+      # ── Affinity: one pod per node ────────────────────────────────────────────
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: thor-agent
+              topologyKey: kubernetes.io/hostname
+
+---
+# ─── Service: internal access ─────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: thor-agent
+  namespace: thor-firewall
+  labels:
+    app: thor-agent
+  annotations:
+    prometheus.io/scrape: "true"
+spec:
+  selector:
+    app: thor-agent
+  ports:
+    - name: api
+      port: 8080
+      targetPort: api
+    - name: api-tls
+      port: 8443
+      targetPort: api-tls
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+  type: ClusterIP
+  sessionAffinity: None
+
+---
+# ─── PersistentVolumeClaim: audit log ─────────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: thor-audit-pvc
+  namespace: thor-firewall
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: fast-ssd       # replace with your StorageClass
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# ─── ConfigMap: runtime configuration ────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thor-config
+  namespace: thor-firewall
+data:
+  kafka-brokers: "kafka-0.kafka.thor-firewall.svc.cluster.local:9092,kafka-1.kafka.thor-firewall.svc.cluster.local:9092,kafka-2.kafka.thor-firewall.svc.cluster.local:9092"
+  siem-endpoint: ""
+  geo-block-countries: "KP,IR,SY,CU"
+  intel-refresh-mins: "60"

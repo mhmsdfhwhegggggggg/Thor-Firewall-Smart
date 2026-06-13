@@ -1,0 +1,164 @@
+---
+# ─── Kafka StatefulSet — 3-node cluster for HA ────────────────────────────────
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: thor-firewall
+spec:
+  serviceName: kafka
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kafka
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: kafka
+          image: bitnami/kafka:3.6
+          ports:
+            - name: internal
+              containerPort: 9092
+            - name: controller
+              containerPort: 9093
+          env:
+            - name: KAFKA_CFG_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['apps.kubernetes.io/pod-index']
+            - name: KAFKA_CFG_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
+              value: "0@kafka-0.kafka:9093,1@kafka-1.kafka:9093,2@kafka-2.kafka:9093"
+            - name: KAFKA_CFG_LISTENERS
+              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+            - name: KAFKA_CFG_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://$(POD_NAME).kafka.thor-firewall.svc.cluster.local:9092"
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_CFG_LOG_RETENTION_HOURS
+              value: "168"          # 7 days for raw events
+            - name: KAFKA_CFG_LOG_RETENTION_BYTES
+              value: "107374182400" # 100 GB per partition
+            - name: KAFKA_CFG_NUM_PARTITIONS
+              value: "12"
+            - name: KAFKA_CFG_DEFAULT_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_CFG_MIN_INSYNC_REPLICAS
+              value: "2"
+            - name: KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE
+              value: "false"
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /bitnami/kafka
+          livenessProbe:
+            exec:
+              command: ["kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 200Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: thor-firewall
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: internal
+      port: 9092
+      targetPort: 9092
+    - name: controller
+      port: 9093
+      targetPort: 9093
+  clusterIP: None    # Headless service for StatefulSet DNS
+  type: ClusterIP
+
+---
+# ─── Kafka Topic Init Job ──────────────────────────────────────────────────────
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topic-init
+  namespace: thor-firewall
+  annotations:
+    "helm.sh/hook": post-install
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: topic-init
+          image: bitnami/kafka:3.6
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+              BROKERS="kafka-0.kafka.thor-firewall.svc.cluster.local:9092"
+
+              create_topic() {
+                local name=$1 partitions=$2 retention_ms=$3
+                kafka-topics.sh --bootstrap-server $BROKERS \
+                  --create --if-not-exists \
+                  --topic "$name" \
+                  --partitions "$partitions" \
+                  --replication-factor 3 \
+                  --config retention.ms=$retention_ms \
+                  --config min.insync.replicas=2
+                echo "Topic created: $name (parts=$partitions, retention=${retention_ms}ms)"
+              }
+
+              # Wait for Kafka to be ready
+              until kafka-topics.sh --bootstrap-server $BROKERS --list 2>/dev/null; do
+                echo "Waiting for Kafka..."; sleep 5;
+              done
+
+              create_topic "thor.raw_events"  12  604800000    # 7 days
+              create_topic "thor.alerts"      6   2592000000   # 30 days
+              create_topic "thor.audit"       3   31536000000  # 365 days (immutable)
+              create_topic "thor.ioc_updates" 3   86400000     # 1 day (feed updates)
+              create_topic "thor.commands"    3   3600000      # 1 hour
+
+              echo "All topics created successfully"
