@@ -3,8 +3,8 @@
 
 #[cfg(test)]
 mod auth_tests {
-    use thor_agent::api::auth_middleware::{ThorRole, generate_token, Claims};
-    use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+    use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+    use thor_agent::api::auth_middleware::{generate_token, Claims, ThorRole};
 
     fn set_test_secret() {
         std::env::set_var("THOR_JWT_SECRET", "test_secret_for_unit_tests_only_64_chars_long_aaaaaaa");
@@ -58,8 +58,9 @@ mod auth_tests {
 
 #[cfg(test)]
 mod audit_tests {
-    use thor_agent::audit::{AuditLogger, AuditAction, AuditResult};
     use std::fs;
+
+    use thor_agent::audit::{AuditAction, AuditLogger, AuditResult};
 
     fn temp_db() -> String {
         format!("/tmp/thor_test_audit_{}", uuid::Uuid::new_v4())
