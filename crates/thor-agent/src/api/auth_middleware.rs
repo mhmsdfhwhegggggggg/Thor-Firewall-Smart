@@ -12,7 +12,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use jsonwebtoken::{decode, DecodingKey, EncodingKey, Validation, Algorithm, encode, Header};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 use tracing::warn;
@@ -47,8 +47,8 @@ pub enum ThorRole {
 impl ThorRole {
     pub fn level(&self) -> u8 {
         match self {
-            ThorRole::Admin    => 3,
-            ThorRole::Analyst  => 2,
+            ThorRole::Admin => 3,
+            ThorRole::Analyst => 2,
             ThorRole::Readonly => 1,
         }
     }
@@ -59,11 +59,11 @@ impl ThorRole {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: String,       // Username / Agent ID
+    pub sub: String, // Username / Agent ID
     pub role: ThorRole,
-    pub exp: usize,        // Unix timestamp expiry
-    pub iat: usize,        // Issued at
-    pub jti: String,       // JWT ID (for revocation)
+    pub exp: usize, // Unix timestamp expiry
+    pub iat: usize, // Issued at
+    pub jti: String, // JWT ID (for revocation)
 }
 
 // ─── Token generation (used by login handler) ────────────────────────────────
