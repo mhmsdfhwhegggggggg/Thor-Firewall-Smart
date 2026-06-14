@@ -128,11 +128,13 @@ impl FeatureExtractor {
     fn extract_xdp_features(event: &XdpDropEvent) -> Vec<f32> {
         let mut features = vec![0.0f32; 32]; // FEATURE_DIM = 32
 
+        let src_ipv4 = unsafe { event.src_ip.ipv4 };
+        let dst_ipv4 = unsafe { event.dst_ip.ipv4 };
         // [0-3] ميزات IP (مطبعة ومقسمة)
-        features[0] = (event.src_ip >> 24) as f32 / 255.0;
-        features[1] = ((event.src_ip >> 16) & 0xFF) as f32 / 255.0;
-        features[2] = (event.dst_ip >> 24) as f32 / 255.0;
-        features[3] = ((event.dst_ip >> 16) & 0xFF) as f32 / 255.0;
+        features[0] = (src_ipv4 >> 24) as f32 / 255.0;
+        features[1] = ((src_ipv4 >> 16) & 0xFF) as f32 / 255.0;
+        features[2] = (dst_ipv4 >> 24) as f32 / 255.0;
+        features[3] = ((dst_ipv4 >> 16) & 0xFF) as f32 / 255.0;
 
         // [4-5] ميزات المنافذ
         features[4] = event.src_port as f32 / 65535.0;

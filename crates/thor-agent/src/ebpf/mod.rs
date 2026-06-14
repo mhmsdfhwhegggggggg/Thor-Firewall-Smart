@@ -1,7 +1,10 @@
 //! eBPF Manager with Fail-Open Safety
 //! If the agent crashes, XDP programs detach automatically and traffic flows normally.
 
-use aya::programs::{Xdp, XdpFlags, links::Xdplink};
+pub mod loader;
+
+use aya::programs::{Xdp, XdpFlags};
+use aya::programs::links::Xdplink;
 use anyhow::{Context, Result};
 use tracing::{info, warn, error};
 

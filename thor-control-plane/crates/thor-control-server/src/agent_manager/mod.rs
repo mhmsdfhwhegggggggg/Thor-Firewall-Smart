@@ -42,7 +42,7 @@ pub struct AgentSession {
 pub struct AgentManager {
     db: PgPool,
     /// تخزين سريع في الذاكرة للوكلاء المتصلين (O(1) lookup)
-    active_agents: Arc<DashMap<String, AgentSession>>,
+    pub active_agents: Arc<DashMap<String, AgentSession>>,
     /// قناة بث لتحديثات السياسات (تتسع لـ 1000 تحديث معلق)
     policy_tx: broadcast::Sender<PolicyUpdate>,
 }
@@ -167,7 +167,23 @@ impl AgentManager {
     }
 
     fn generate_jwt(&self, agent_id: &str) -> Result<String> {
-        Ok(format!("mock_jwt_token_for_{}", agent_id))
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use serde::{Serialize, Deserialize};
+        
+        #[derive(Debug, Serialize, Deserialize)]
+        struct Claims {
+            sub: String,
+            exp: usize,
+        }
+
+        let claims = Claims {
+            sub: agent_id.to_owned(),
+            exp: (chrono::Utc::now() + chrono::Duration::hours(24)).timestamp() as usize,
+        };
+
+        let secret = std::env::var("JWT_SECRET").expect("CRITICAL: JWT_SECRET environment variable is missing!");
+        let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))?;
+        Ok(token)
     }
 
     async fn log_audit(&self, actor: &str, action: &str, res_type: &str, res_id: &str, details: &serde_json::Value) -> Result<()> {

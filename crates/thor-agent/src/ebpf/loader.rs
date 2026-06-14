@@ -14,16 +14,23 @@ macro_rules! include_bytes_aligned {
     };
 }
 
+#[repr(C)]
+pub union IpAddrC {
+    pub ipv4: u32,
+    pub ipv6: [u32; 4],
+}
+
 // هياكل البيانات المطابقة تماماً لما في كود C (يجب أن تكون #[repr(C)])
 #[repr(C)]
 pub struct XdpDropEvent {
-    pub src_ip: u32,
-    pub dst_ip: u32,
+    pub src_ip: IpAddrC,
+    pub dst_ip: IpAddrC,
     pub src_port: u16,
     pub dst_port: u16,
     pub protocol: u8,
     pub reason: u8,
-    pub _pad: [u8; 2],
+    pub is_ipv6: u8,
+    pub _pad: u8,
     pub timestamp_ns: u64,
 }
 
@@ -44,10 +51,11 @@ impl EventProcessor {
         match self.scorer.score_event(&event).await {
             Ok(result) => {
                 if result.is_anomaly {
+                    let source_ip_v4 = unsafe { event.src_ip.ipv4 };
                     tracing::warn!(
                         "🚨 AI ANOMALY DETECTED! Score: {:.4} | SrcIP: {:?} | DstPort: {}",
                         result.anomaly_score,
-                        event.src_ip,
+                        source_ip_v4,
                         event.dst_port
                     );
                     
@@ -63,6 +71,7 @@ impl EventProcessor {
     }
 }
 
+pub struct EbpfManager {
     bpf: Arc<Ebpf>,
 }
 
@@ -72,22 +81,42 @@ impl EbpfManager {
 
         // 1. تحميل ملف ELF المجمع مسبقاً (يحتوي على BTF مدمج)
         // ملاحظة: في الإنتاج، نستخدم include_bytes_aligned!
+        let program_bytes = std::fs::read("bpf/xdp_drop.o").unwrap_or_else(|_| {
+            tracing::warn!("bpf/xdp_drop.o not found! Ensure you compile the eBPF C code first. Returning early...");
+            vec![]
+        });
+        
+        if program_bytes.is_empty() {
+            tracing::error!("BPF bytes are empty. Cannot initialize BPF. Exiting EbpfManager load.");
+            return Err(anyhow::anyhow!("bpf/xdp_drop.o is empty or missing"));
+        }
+        
         let mut bpf = EbpfLoader::new()
             .set_global("MAX_BLOCKLIST_ENTRIES", &65536u32, true)
-            // Using dummy bytes since we can't compile C to BPF in this fast preview environment directly
-            // .load(include_bytes_aligned!("../../bpf/xdp_drop.o"))?;
-            .load(&[])?;
+            .load(&program_bytes)?;
 
-        // 2. تحميل وتثبيت برنامج XDP
-        let program: &mut Xdp = bpf.program_mut("thor_xdp_firewall").unwrap().try_into()?;
-        program.load()?;
-        // استخدام SKB_MODE كـ Fallback آمن إذا كان DRV_MODE غير مدعوم من كارت الشبكة
-        program.attach("eth0", XdpFlags::DRV_MODE)
-            .or_else(|_| {
-                warn!("DRV mode not supported, falling back to SKB mode (still safe)");
-                program.attach("eth0", XdpFlags::SKB_MODE)
-            })?;
-        info!("✅ XDP Firewall attached to eth0");
+        // Configuration Map
+        let is_fail_close = std::env::var("THOR_FAIL_MODE").unwrap_or_else(|_| "open".to_string()) == "close";
+        if let Ok(mut config_map) = aya::maps::Array::<_, u32>::try_from(bpf.map_mut("thor_config").unwrap()) {
+            config_map.set(0, if is_fail_close { 1 } else { 0 }, 0).unwrap_or_else(|e| {
+                tracing::error!("Failed to set fail-close configuration: {}", e);
+            });
+            tracing::info!("🔒 Thor XDP Firewall set to Fail-{} mode", if is_fail_close { "Close" } else { "Open" });
+        }
+
+        // 2. تحميل وتثبيت برنامج XDP - Only if loaded
+        if let Ok(program) = bpf.program_mut("thor_xdp_firewall") {
+            let prg: &mut Xdp = program.try_into()?;
+            prg.load()?;
+            prg.attach("eth0", XdpFlags::DRV_MODE)
+                .or_else(|_| {
+                    warn!("DRV mode not supported, falling back to SKB mode");
+                    prg.attach("eth0", XdpFlags::SKB_MODE)
+                })?;
+            info!("✅ XDP Firewall attached to eth0");
+        } else {
+            tracing::error!("XDP program `thor_xdp_firewall` could not be found or loaded.");
+        }
 
         // 3. تحميل وتثبيت Kprobe
         let kprobe_prog: &mut KProbe = bpf.program_mut("thor_monitor_connect").unwrap().try_into()?;

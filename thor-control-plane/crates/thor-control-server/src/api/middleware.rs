@@ -23,7 +23,7 @@ pub struct Claims {
 
 pub struct RequireRole(pub Role);
 
-impl<S> axum::extract::FromRequestParts<S> for RequireRole 
+impl<S> axum::extract::FromRequestParts<S> for Claims 
 where S: Send + Sync 
 {
     type Rejection = (StatusCode, &'static str);
@@ -34,19 +34,14 @@ where S: Send + Sync
             .and_then(|h| h.strip_prefix("Bearer "))
             .ok_or((StatusCode::UNAUTHORIZED, "Missing token"))?;
 
-        // This assumes a generated public key exists at paths defined, for now we will stub it or gently handle it:
-        // Use a dummy static key for the example or read from file
-        let public_key = std::env::var("SSO_PUBLIC_KEY").unwrap_or_else(|_| "dummy_public_key".to_string());
-        let decoding_key = DecodingKey::from_rsa_pem(public_key.as_bytes())
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid key format"))?;
-
-        let token_data = decode::<Claims>(auth_header, &decoding_key, &Validation::new(Algorithm::RS256))
+        let secret = std::env::var("JWT_SECRET").expect("CRITICAL: JWT_SECRET environment variable is missing! Refusing to start with insecure defaults.");
+        
+        let decoding_key = DecodingKey::from_secret(secret.as_bytes());
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.validate_exp = true;
+        let token_data = decode::<Claims>(auth_header, &decoding_key, &validation)
             .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid token"))?;
 
-        if token_data.claims.role != Self.0 && token_data.claims.role != Role::SecManager {
-            return Err((StatusCode::FORBIDDEN, "Insufficient privileges"));
-        }
-
-        Ok(Self(token_data.claims.role))
+        Ok(token_data.claims)
     }
 }

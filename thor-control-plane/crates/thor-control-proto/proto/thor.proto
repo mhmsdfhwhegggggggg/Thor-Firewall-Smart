@@ -17,6 +17,12 @@ service ThorControlService {
     
     // 4. نبضات الحياة (Heartbeat) لمراقبة صحة الأسطول
     rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+    
+    // 5. تحديث أوزان الذكاء الاصطناعي محلياً (Federated Learning - Zero Data Sharing)
+    rpc SubmitModelWeights(ModelWeightUpdate) returns (ModelWeightAck);
+    
+    // 6. بث بصمات الهجوم العالمية (Global Threat Intelligence Graph)
+    rpc BroadcastThreat(ThreatIndicator) returns (ThreatIndicatorAck);
 }
 
 // --- الرسائل (Messages) ---
@@ -83,5 +89,33 @@ message AgentMetrics {
 
 message HeartbeatResponse {
     bool is_healthy = 1;
+    string message = 2;
+}
+
+// Federated Learning Messages
+message ModelWeightUpdate {
+    string agent_id = 1;
+    string model_version = 2;
+    bytes weights = 3;  // Securely uploaded gradient deltas
+    int32 sample_size = 4;
+}
+
+message ModelWeightAck {
+    bool accepted = 1;
+    string global_model_version = 2;
+}
+
+// Global Threat Intelligence Messages
+message ThreatIndicator {
+    string agent_id = 1;
+    string ja4_fingerprint = 2;
+    string ioc_type = 3; // e.g. "IP", "JA4", "URL"
+    string value = 4;
+    double ai_confidence_score = 5;
+    int64 observed_at = 6;
+}
+
+message ThreatIndicatorAck {
+    bool distributed_globally = 1;
     string message = 2;
 }
