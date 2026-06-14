@@ -1,0 +1,12 @@
+[package]
+name = "thor-xdp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aya = { version = "0.12", features = ["async"] }
+aya-log = "0.2"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+anyhow = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+log = "0.4"

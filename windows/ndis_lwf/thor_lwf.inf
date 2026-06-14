@@ -1,0 +1,54 @@
+[Version]
+Signature   = "$Windows NT$"
+Class       = NetService
+ClassGUID   = {4D36E974-E325-11CE-BFC1-08002BE10318}
+Provider    = %ProviderString%
+CatalogFile = thor_lwf.cat
+DriverVer   = 01/01/2024,1.0.0.0
+
+[Manufacturer]
+%ManufacturerName% = Thor, NTamd64
+
+[Thor.NTamd64]
+%ThorLWF_Desc% = ThorLWF_Install, ms_thor_lwf
+
+[ThorLWF_Install.NT]
+Characteristics = 0x40000
+NetCfgInstanceId = "{YOUR-GUID-HERE}"
+AddReg = ThorLWF_AddReg
+CopyFiles = ThorLWF_CopyFiles
+
+[ThorLWF_Install.NT.Services]
+AddService = ThorLWF, 2, ThorLWF_Service, ThorLWF_EventLog
+
+[ThorLWF_Service]
+DisplayName    = %ThorLWF_Desc%
+ServiceType    = 1
+StartType      = 3
+ErrorControl   = 1
+ServiceBinary  = %12%\thor_lwf.sys
+LoadOrderGroup = NDIS
+
+[ThorLWF_AddReg]
+HKR, Ndi,            Service,    0, "ThorLWF"
+HKR, Ndi\Interfaces,  UpperRange, 0, "noupper"
+HKR, Ndi\Interfaces, LowerRange, 0, "ethernet"
+
+[ThorLWF_CopyFiles]
+thor_lwf.sys
+
+[SourceDisksNames]
+1 = %DiskDescription%, "", 1
+
+[SourceDisksFiles]
+thor_lwf.sys = 1
+
+[DestinationDirs]
+DefaultDestDir = 12
+ThorLWF_CopyFiles = 12
+
+[Strings]
+ProviderString     = "Thor Security"
+ManufacturerName   = "Thor Security"
+ThorLWF_Desc       = "Thor Network Filter"
+DiskDescription    = "Thor Installation Disk"

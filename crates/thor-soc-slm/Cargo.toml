@@ -1,0 +1,10 @@
+[package]
+name = "thor-soc-slm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+llama_cpp = "0.1.0"
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
