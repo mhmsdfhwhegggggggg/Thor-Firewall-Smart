@@ -104,6 +104,26 @@ impl EbpfManager {
             tracing::info!("🔒 Thor XDP Firewall set to Fail-{} mode", if is_fail_close { "Close" } else { "Open" });
         }
 
+        // Heartbeat Map Initialization (Fail-Close robust mechanism)
+        if let Some(map) = bpf.take_map("thor_agent_tick") {
+            if let Ok(mut tick_map) = aya::maps::Array::<_, u32>::try_from(map) {
+                let _ = tick_map.set(0, 0, 0); 
+                // Spawn background task to update tick
+                tokio::spawn(async move {
+                    let mut tick: u32 = 0;
+                    loop {
+                        tick = tick.wrapping_add(1);
+                        if let Err(e) = tick_map.set(0, tick, 0) {
+                            tracing::error!("Failed to update heartbeat map: {}", e);
+                            break;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    }
+                });
+                tracing::info!("💓 Thor Heartbeat Timer started (2 ticks/sec)");
+            }
+        }
+
         // 2. تحميل وتثبيت برنامج XDP - Only if loaded
         if let Ok(program) = bpf.program_mut("thor_xdp_firewall") {
             let prg: &mut Xdp = program.try_into()?;

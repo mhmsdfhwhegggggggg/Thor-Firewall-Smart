@@ -105,25 +105,21 @@ async fn main() -> Result<()> {
         let svc = ThorControlServiceServer::new(ThorControlServiceImpl { state: grpc_state });
         
         let tls_setup = || -> Result<ServerTlsConfig> {
-            let cert = std::fs::read_to_string("tls/server.crt")
-                .unwrap_or_else(|_| {
-                    tracing::warn!("Server TLS cert not found. Using dummy for compilation.");
-                    "".to_string()
-                });
-            let key = std::fs::read_to_string("tls/server.key")
-                .unwrap_or_else(|_| "".to_string());
-            let ca_cert = std::fs::read_to_string("tls/ca.crt")
-                .unwrap_or_else(|_| "".to_string());
+            let cert_path = std::env::var("THOR_SERVER_CERT").unwrap_or_else(|_| "tls/server.crt".to_string());
+            let key_path = std::env::var("THOR_SERVER_KEY").unwrap_or_else(|_| "tls/server.key".to_string());
+            let ca_cert_path = std::env::var("THOR_CA_CERT").unwrap_or_else(|_| "tls/ca.crt".to_string());
+
+            let cert = std::fs::read_to_string(&cert_path).with_context(|| format!("Missing server TLS cert at {}", cert_path))?;
+            let key = std::fs::read_to_string(&key_path).with_context(|| format!("Missing server TLS key at {}", key_path))?;
+            let ca_cert = std::fs::read_to_string(&ca_cert_path).with_context(|| format!("Missing CA cert at {}", ca_cert_path))?;
                 
-            let mut tls = ServerTlsConfig::new();
-            if !cert.is_empty() && !key.is_empty() {
-                let identity = Identity::from_pem(cert, key);
-                // mTLS: Require client cert and validate with CA
-                tls = tls.identity(identity);
-                if !ca_cert.is_empty() {
-                    tls = tls.client_ca_root(Certificate::from_pem(ca_cert));
-                }
-            }
+            let identity = Identity::from_pem(cert, key);
+            
+            // Strict mTLS: Require client cert and validate with CA
+            let tls = ServerTlsConfig::new()
+                .identity(identity)
+                .client_ca_root(Certificate::from_pem(ca_cert));
+                
             Ok(tls)
         };
 

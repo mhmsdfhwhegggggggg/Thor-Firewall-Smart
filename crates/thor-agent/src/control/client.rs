@@ -1,16 +1,16 @@
 //! Thor Agent Control Plane Client
 //! Maintains persistent, resilient connection to the central server.
 
-use anyhow::Result;
+use anyhow::{Result, Context};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 use tracing::{info, warn, error};
+use tonic::transport::{Channel, ClientTlsConfig, Identity, Certificate};
+use std::fs;
 
 use crate::detection::sigma::{GuardedDynamicRule, RuleMode, RuleSource};
 use std::time::Instant;
 use std::sync::atomic::AtomicUsize;
-// use tonic::transport::{Channel, ClientTlsConfig, Identity, Certificate};
-use std::fs;
 
 pub struct ControlClient {
     agent_id: String,
@@ -44,31 +44,34 @@ impl ControlClient {
     }
 
     async fn connect_and_listen(&self) -> Result<()> {
-        info!("🔗 Connecting to Control Plane at {} with mTLS", self.server_url);
+        info!("🔗 Connecting to Control Plane at {} with STRICT mTLS", self.server_url);
         
-        // Mocking the read for mTLS setup as expected by enterprise environments
-        // let agent_cert = fs::read("/etc/thor/agent.crt").unwrap_or_default();
-        // let agent_key = fs::read("/etc/thor/agent.key").unwrap_or_default();
-        // let ca_cert = fs::read("/etc/thor/ca.crt").unwrap_or_default();
+        let agent_cert_path = std::env::var("THOR_AGENT_CERT").unwrap_or_else(|_| "/etc/thor/agent.crt".into());
+        let agent_key_path = std::env::var("THOR_AGENT_KEY").unwrap_or_else(|_| "/etc/thor/agent.key".into());
+        let ca_cert_path = std::env::var("THOR_CA_CERT").unwrap_or_else(|_| "/etc/thor/ca.crt".into());
 
-        /*
+        let agent_cert = fs::read(&agent_cert_path).with_context(|| format!("Missing agent cert at {}", agent_cert_path))?;
+        let agent_key = fs::read(&agent_key_path).with_context(|| format!("Missing agent key at {}", agent_key_path))?;
+        let ca_cert = fs::read(&ca_cert_path).with_context(|| format!("Missing CA cert at {}", ca_cert_path))?;
+
         let tls_config = ClientTlsConfig::new()
-            .domain_name("thor-control.bank.internal") // Should match server cert CN
+            .domain_name("thor-control.bank.internal") // Ensure SNI matches Server Certificate CN
             .identity(Identity::from_pem(agent_cert, agent_key))
             .ca_certificate(Certificate::from_pem(ca_cert));
 
-        let channel = Channel::from_static("https://thor-control.bank.internal:50051")
+        let channel = Channel::from_shared(self.server_url.clone())?
             .tls_config(tls_config)?
             .connect()
             .await?;
 
-        let _client = ThorControlServiceClient::new(channel);
-        */
+        // Implementation of ThorControlServiceClient streaming will be added here
+        // let mut client = ThorControlServiceClient::new(channel);
 
         info!("📡 Subscribed to real-time policy stream.");
 
-        // Placeholder for streaming logic
-        sleep(Duration::from_secs(10)).await;
-        Ok(())
+        // Placeholder for streaming logic loop
+        loop {
+            sleep(Duration::from_secs(10)).await;
+        }
     }
 }
