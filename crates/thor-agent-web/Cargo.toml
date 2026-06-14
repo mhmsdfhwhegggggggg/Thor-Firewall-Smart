@@ -1,0 +1,9 @@
+[package]
+name = "thor-agent-web"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thor-common = { path = "../thor-common" }
+tokio = { workspace = true }
+aya = "0.12"

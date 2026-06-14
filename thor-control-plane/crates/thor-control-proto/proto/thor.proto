@@ -65,6 +65,34 @@ message IncidentReport {
     repeated string actions_taken = 6; // e.g., "ISOLATED", "QUARANTINED"
     int64 timestamp = 7;
     map<string, string> context = 8;
+    
+    // Agent specific details
+    NetworkDetails network_details = 9;
+    WebDetails web_details = 10;
+    ServerDetails server_details = 11;
+}
+
+message NetworkDetails {
+    string src_ip = 1;
+    string dst_ip = 2;
+    uint32 src_port = 3;
+    uint32 dst_port = 4;
+    string tcp_flags = 5;
+    string protocol = 6;
+}
+
+message WebDetails {
+    string http_method = 1;
+    string url = 2;
+    map<string, string> headers = 3;
+    bytes payload = 4;
+}
+
+message ServerDetails {
+    uint32 pid = 1;
+    string process_name = 2;
+    string user = 3;
+    string action = 4;
 }
 
 message IncidentAck {

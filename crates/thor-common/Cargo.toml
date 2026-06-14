@@ -1,16 +1,11 @@
 [package]
 name = "thor-common"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+version = "0.1.0"
+edition = "2021"
 
 [dependencies]
-# POD types only — no_std compatible
-serde = { version = "1.0", features = ["derive"], optional = true }
-
-[features]
-default = []
-serde = ["dep:serde"]
-
-[lib]
-name = "thor_common"
+tokio = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+rustls = { version = "0.22", features = ["ring"] }
+tonic = { version = "0.11", features = ["tls", "transport"] }
