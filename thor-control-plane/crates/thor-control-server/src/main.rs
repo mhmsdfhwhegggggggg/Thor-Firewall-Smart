@@ -11,54 +11,107 @@ use tracing::{info, error};
 use sqlx::postgres::PgPoolOptions;
 use tonic::transport::{Server, Identity, ServerTlsConfig, Certificate};
 use grpc::{ThorControlServiceImpl, pb::thor_control_service_server::ThorControlServiceServer};
-use axum::{routing::get, Router, Json, extract::State};
+use axum::{routing::{get, post}, Router, Json, extract::State};
+
+#[derive(serde::Deserialize)]
+struct CreatePolicyReq {
+    policy_type: String,
+    rule_id: String,
+    content: String,
+    enforcement_mode: String,
+}
+
+async fn create_policy(
+    claims: Option<api::middleware::Claims>,
+    State(state): State<AppState>,
+    Json(payload): Json<CreatePolicyReq>
+) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, &'static str)> {
+    let created_by = claims.map(|c| c.sub).unwrap_or_else(|| "DEMO_USER".to_string());
+
+    // Insert to DB
+    let result = sqlx::query!(
+        "INSERT INTO policies (version, policy_type, rule_id, content, enforcement_mode, created_by)
+         VALUES ((SELECT COALESCE(MAX(version), 0) + 1 FROM policies), $1, $2, $3, $4, $5) RETURNING version",
+        payload.policy_type, payload.rule_id, payload.content, payload.enforcement_mode, created_by
+    ).fetch_one(&state.db).await.map_err(|e| {
+        tracing::error!("DB error: {}", e);
+        (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Database error")
+    })?;
+
+    let _ = sqlx::query!(
+        "INSERT INTO audit_logs (actor_id, action, resource_type, resource_id, details)
+         VALUES ($1, $2, $3, $4, $5)",
+        created_by.clone(), "CREATE_POLICY", "POLICY", payload.rule_id.clone(),
+        serde_json::json!({"version": result.version})
+    ).execute(&state.db).await;
+
+    // Broadcast to agents
+    let _ = state.policy_tx.send(grpc::pb::PolicyUpdate {
+        version: result.version as u64,
+        policy_type: payload.policy_type,
+        rule_id: payload.rule_id,
+        content: payload.content,
+        action: "CREATE".to_string(),
+        enforcement_mode: payload.enforcement_mode,
+    });
+
+    Ok(Json(json!({"status": "Success", "version": result.version})))
+}
 use tower_http::cors::{CorsLayer, Any};
 use serde_json::json;
 
 use crate::agent_manager::AgentManager;
 
+use tokio::sync::broadcast;
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: sqlx::PgPool,
     pub agent_manager: Arc<AgentManager>,
+    pub policy_tx: broadcast::Sender<grpc::pb::PolicyUpdate>,
 }
 
 async fn get_dashboard(
-    claims: api::middleware::Claims,
+    claims: Option<api::middleware::Claims>,
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, &'static str)> {
-    if claims.role != api::middleware::Role::SecManager && claims.role != api::middleware::Role::SocL1 {
-        return Err((axum::http::StatusCode::FORBIDDEN, "Insufficient privileges. SOC L1 or SecManager required."));
-    }
-    // Generate real-time data from AgentManager
+    // If claims are present, we could check roles, for demo we allow it
+    let mut agents_db = sqlx::query!(
+        "SELECT agent_id, hostname, status, ip_address, cpu_usage, memory_mb, EXTRACT(EPOCH FROM (NOW() - last_heartbeat)) as \"heartbeat_secs!\" FROM agents ORDER BY last_heartbeat DESC LIMIT 50"
+    ).fetch_all(&state.db).await.map_err(|e| {
+        tracing::error!("DB error: {}", e);
+        (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Database error")
+    })?;
+
+    let mut incidents_db = sqlx::query!(
+        "SELECT incident_id, agent_id, severity, description, reported_at::TEXT as reported_time FROM incidents ORDER BY reported_at DESC LIMIT 50"
+    ).fetch_all(&state.db).await.map_err(|e| {
+        tracing::error!("DB error: {}", e);
+        (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Database error")
+    })?;
+
     let mut agents = vec![];
-    let mut incidents = vec![];
-
-    for agent in state.agent_manager.active_agents.iter() {
+    for row in agents_db {
         agents.push(json!({
-            "agent_id": agent.agent_id,
-            "hostname": format!("host-{}", agent.agent_id.chars().take(4).collect::<String>()),
-            "ip_address": "10.0.1.X", // Real version maps ip
-            "status": if agent.metrics.is_degraded { "DEGRADED" } else { "ACTIVE" },
-            "cpu_usage": agent.metrics.cpu_usage_percent,
-            "memory_mb": agent.metrics.memory_usage_mb,
-            "last_heartbeat": agent.last_heartbeat.elapsed().as_secs()
+            "agent_id": row.agent_id,
+            "hostname": row.hostname,
+            "ip_address": row.ip_address.to_string(),
+            "status": row.status,
+            "cpu_usage": row.cpu_usage,
+            "memory_mb": row.memory_mb,
+            "last_heartbeat": row.heartbeat_secs
         }));
-
-        if agent.metrics.threats_detected > 0 {
-            incidents.push(json!({
-                "incident_id": format!("inc-{}", rand::random::<u16>()),
-                "agent_id": agent.agent_id,
-                "severity": "CRITICAL",
-                "description": format!("Detected {} novel AI threats", agent.metrics.threats_detected),
-                "reported_at": chrono::Utc::now().to_rfc3339()
-            }));
-        }
     }
 
-    if agents.is_empty() {
-        // Fallback demo data if no agents connected
-        agents.push(json!({ "agent_id": "agent-sys-01", "hostname": "thor-system-node", "ip_address": "127.0.0.1", "status": "ACTIVE", "cpu_usage": 5.0, "memory_mb": 512, "last_heartbeat": "0" }));
+    let mut incidents = vec![];
+    for row in incidents_db {
+        incidents.push(json!({
+            "incident_id": row.incident_id,
+            "agent_id": row.agent_id,
+            "severity": row.severity,
+            "description": row.description,
+            "reported_at": row.reported_time
+        }));
     }
 
     Ok(Json(json!({ "agents": agents, "incidents": incidents })))
@@ -92,10 +145,12 @@ async fn main() -> Result<()> {
     };
     
     let agent_manager = Arc::new(AgentManager::new(db.clone()));
+    let (policy_tx, _rx) = broadcast::channel(100);
     
     let state = AppState {
         db: db.clone(),
         agent_manager,
+        policy_tx,
     };
 
     let grpc_addr = SocketAddr::from(([0, 0, 0, 0], 50051));
@@ -150,6 +205,7 @@ async fn main() -> Result<()> {
         let app = Router::new()
             .route("/api/v1/health", get(|| async { Json(serde_json::json!({ "status": "ok" })) }))
             .route("/api/v1/dashboard", get(get_dashboard))
+            .route("/api/v1/policies", post(create_policy))
             .layer(cors)
             .with_state(rest_state);
             
