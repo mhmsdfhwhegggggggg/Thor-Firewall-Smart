@@ -53,7 +53,7 @@ ipnetwork = "0.20"
 bytes = "1.6"
 
 # Detection
-ahocorasick = "1.1"
+ahocorasick = { package = "aho-corasick", version = "1.1" }
 yara = "0.6"
 bloomfilter = "1.0"
 walkdir = "2.5"
