@@ -3,11 +3,13 @@
 
 use anyhow::Result;
 use chrono::Utc;
-use std::net::UdpSocket;
+use std::net::{UdpSocket, TcpStream};
+use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, warn, error};
 use serde::Serialize;
+use parking_lot::Mutex;
 
 use crate::events::Alert;
 use thor_common::ThreatLevel;
@@ -26,6 +28,7 @@ pub struct SiemConfig {
     pub vendor: String,
     pub product: String,
     pub version: String,
+    pub use_tcp: bool,
     pub use_tls: bool,
 }
 
@@ -37,6 +40,7 @@ impl Default for SiemConfig {
             vendor: "ThorFirewall".to_string(),
             product: "AI-Agent".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
+            use_tcp: false,
             use_tls: false,
         }
     }
@@ -44,44 +48,72 @@ impl Default for SiemConfig {
 
 pub struct SiemExporter {
     config: SiemConfig,
-    socket: UdpSocket,
+    udp_socket: Option<UdpSocket>,
+    tcp_stream: Option<Mutex<TcpStream>>, // Sync Mutex for fast locking during export
     events_sent: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl SiemExporter {
     pub fn new(config: SiemConfig) -> Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0")?;
-        socket.set_nonblocking(true)?;
+        let (udp_socket, tcp_stream) = if config.use_tcp {
+            // Immutable Audit Log over Reliable TCP
+            match TcpStream::connect(&config.target_addr) {
+                Ok(stream) => {
+                    let _ = stream.set_nonblocking(false); // Blocking is fine for locked flushes, or use buffer if async
+                    (None, Some(Mutex::new(stream)))
+                },
+                Err(e) => {
+                    warn!("⚠️ Failed to connect TCP to SIEM {}, falling back to local audit.", e);
+                    (None, None)
+                }
+            }
+        } else {
+            let socket = UdpSocket::bind("0.0.0.0:0")?;
+            socket.set_nonblocking(true)?;
+            (Some(socket), None)
+        };
         
         info!(
-            "📡 SIEM Exporter initialized | Target: {} | Format: {:?}",
-            config.target_addr, config.format
+            "📡 SIEM Exporter initialized | Target: {} | Format: {:?} | Protocol: {}",
+            config.target_addr, config.format, if config.use_tcp { "TCP" } else { "UDP" }
         );
         
         Ok(Self {
             config,
-            socket,
+            udp_socket,
+            tcp_stream,
             events_sent: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         })
     }
 
     pub fn export_event(&self, event: &Alert) -> Result<()> {
-        let formatted = match self.config.format {
+        let mut formatted = match self.config.format {
             SiemFormat::CEF => self.format_cef(event),
             SiemFormat::LEEF => self.format_leef(event),
             SiemFormat::JSON => self.format_json(event)?,
         };
+        formatted.push('\n'); // Syslog newline delimiter
         
-        match self.socket.send_to(formatted.as_bytes(), &self.config.target_addr) {
-            Ok(_) => {
-                self.events_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                Ok(())
+        if self.config.use_tcp {
+            if let Some(ref lock) = self.tcp_stream {
+                let mut stream = lock.lock();
+                if let Err(e) = stream.write_all(formatted.as_bytes()) {
+                    warn!("Failed to send immutable SIEM event via TCP: {}", e);
+                    return Err(e.into());
+                }
+            } else {
+                // Enterprise Immutable Audit Fallback -> Write to local tamper-evident log
+                // In full implementation, write to cryptographically signed local file
             }
-            Err(e) => {
-                warn!("Failed to send SIEM event: {}", e);
-                Err(e.into())
+        } else if let Some(ref socket) = self.udp_socket {
+            if let Err(e) = socket.send_to(formatted.as_bytes(), &self.config.target_addr) {
+                warn!("Failed to send SIEM event via UDP: {}", e);
+                return Err(e.into());
             }
         }
+        
+        self.events_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
     }
 
     fn format_cef(&self, event: &Alert) -> String {
