@@ -1,0 +1,29 @@
+title: Internal Network Scan Detected
+id: a1b2c3d4-0011-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects network scanning tools often used for internal reconnaissance
+level: medium
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+      - '/nmap'
+      - '/masscan'
+      - '/zmap'
+      - '/arp-scan'
+      - '/netdiscover'
+    CommandLine|contains:
+      - '-sS'
+      - '-sV'
+      - '-p-'
+      - '--top-ports'
+      - '-A'
+      - '-O'
+  condition: selection
+tags:
+  - attack.discovery
+  - attack.t1046

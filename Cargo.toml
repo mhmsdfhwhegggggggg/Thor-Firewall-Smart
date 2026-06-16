@@ -7,76 +7,88 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Thor Security Team"]
 
 [workspace.dependencies]
-# Async runtime
+# ── Async runtime ─────────────────────────────────────────────────────────────
 tokio = { version = "1.37", features = ["full"] }
 
-# Error handling
-anyhow = "1.0"
+# ── Error handling ────────────────────────────────────────────────────────────
+anyhow    = "1.0"
 thiserror = "1.0"
 
-# Logging / Tracing
-tracing = "0.1"
+# ── Logging / Tracing ─────────────────────────────────────────────────────────
+tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender   = "0.2"
 
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
+# ── Serialization ─────────────────────────────────────────────────────────────
+serde      = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
-chrono = { version = "0.4", features = ["serde"] }
+chrono     = { version = "0.4", features = ["serde"] }
 
-# Networking
-axum = { version = "0.7", features = ["ws", "macros", "http2"] }
-tower = { version = "0.4", features = ["timeout", "limit"] }
+# ── Networking ────────────────────────────────────────────────────────────────
+axum       = { version = "0.7", features = ["ws", "macros", "http2"] }
+tower      = { version = "0.4", features = ["timeout", "limit"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip"] }
 
-# Memory & Concurrency
-dashmap = "6.0"
-flume = "0.11"
-crossbeam = "0.8"
+# ── Memory & Concurrency ──────────────────────────────────────────────────────
+dashmap    = "6.0"
+flume      = "0.11"
+crossbeam  = "0.8"
 parking_lot = "0.12"
 
-# eBPF
+# ── eBPF ──────────────────────────────────────────────────────────────────────
 aya = { version = "0.12", features = ["async_tokio"] }
 
-# ML / Inference
-ort = { version = "2.0.0-rc.4", features = ["load-dynamic"] }
+# ── ML / Inference ────────────────────────────────────────────────────────────
+ort     = { version = "2.0.0-rc.4", features = ["load-dynamic"] }
 ndarray = { version = "0.15", features = ["rayon"] }
 
-# Networking utilities
+# ── Networking utilities ──────────────────────────────────────────────────────
 ipnetwork = "0.20"
-bytes = "1.6"
+bytes     = "1.6"
 
-# Detection
-ahocorasick = { package = "aho-corasick", version = "1.1" }
-yara = "0.6"
-bloomfilter = "1.0"
-walkdir = "2.5"
+# ── Detection ─────────────────────────────────────────────────────────────────
+ahocorasick  = { package = "aho-corasick", version = "1.1" }
+yara         = "0.6"
+bloomfilter  = "1.0"
+walkdir      = "2.5"
 
-# API
-utoipa = { version = "4.2", features = ["axum_extras", "chrono"] }
-utoipa-swagger-ui = { version = "7.1", features = ["axum"] }
+# ── API documentation ─────────────────────────────────────────────────────────
+utoipa             = { version = "4", features = ["axum_extras"] }
+utoipa-swagger-ui  = { version = "6", features = ["axum"] }
+
+# ── System ────────────────────────────────────────────────────────────────────
 futures = "0.3"
+nix     = { version = "0.28", features = ["process", "signal", "fs"] }
+sha2    = "0.10"
+rayon   = "1.10"
+libc    = "0.2"
 
-# Process info
-nix = { version = "0.28", features = ["fs", "process", "sched"] }
-sha2 = "0.10"
-rayon = "1.10"
-num_cpus = "1.16"
-libc = "0.2"
+# ── Phase 1: New additions ─────────────────────────────────────────────────────
+blake3   = "1.5"
+hostname = "0.4"
+uuid     = { version = "1.8", features = ["v4"] }
+regex    = "1.10"
+mimalloc = { version = "0.1", default-features = false }
+
+[profile.dev]
+opt-level = 1
+debug = true
 
 [profile.release]
 opt-level = 3
-lto = true
+lto = "thin"
 codegen-units = 1
 panic = "abort"
-strip = true
+strip = "symbols"
 
-[profile.dev]
-opt-level = 0
+[profile.release-debug]
+inherits = "release"
 debug = true
+strip = "none"

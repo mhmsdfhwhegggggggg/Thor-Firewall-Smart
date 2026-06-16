@@ -132,3 +132,27 @@ impl Default for ThorMetrics {
 }
 
 pub type SharedMetrics = Arc<ThorMetrics>;
+
+/// Start Prometheus metrics HTTP server
+pub async fn serve(addr: std::net::SocketAddr, metrics: Arc<ThorMetrics>) {
+    use axum::{Router, routing::get, extract::State, response::Response};
+    use tower_http::trace::TraceLayer;
+
+    async fn metrics_handler(State(m): State<Arc<ThorMetrics>>) -> Response {
+        let body = m.render_prometheus();
+        axum::response::Response::builder()
+            .header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            .body(axum::body::Body::from(body))
+            .unwrap()
+    }
+
+    let app = Router::new()
+        .route("/metrics", get(metrics_handler))
+        .with_state(metrics)
+        .layer(TraceLayer::new_for_http());
+
+    tracing::info!("📊 Metrics server: http://{}/metrics", addr);
+    if let Ok(listener) = tokio::net::TcpListener::bind(addr).await {
+        axum::serve(listener, app).await.ok();
+    }
+}

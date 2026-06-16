@@ -1,0 +1,32 @@
+title: Mimikatz Credential Dumping
+id: a1b2c3d4-0026-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects Mimikatz credential dumping tool usage via various indicators
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_keyword:
+    CommandLine|contains:
+      - 'sekurlsa'
+      - 'lsadump'
+      - 'kerberos::list'
+      - 'kerberos::ptt'
+      - 'privilege::debug'
+      - 'vault::cred'
+      - 'dpapi::'
+      - 'mimikatz'
+  selection_image:
+    Image|endswith:
+      - '\mimikatz.exe'
+      - '\mimilib.dll'
+      - '\mimidrv.sys'
+  condition: selection_keyword or selection_image
+tags:
+  - attack.credential_access
+  - attack.t1003.001
+  - attack.t1003.002
+  - attack.t1558.003

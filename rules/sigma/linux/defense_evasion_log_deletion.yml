@@ -1,0 +1,33 @@
+title: System Log Files Deletion
+id: a1b2c3d4-0009-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects deletion of system log files — used to cover tracks after compromise
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_rm:
+    Image|endswith:
+      - '/rm'
+      - '/shred'
+      - '/wipe'
+    CommandLine|contains:
+      - '/var/log'
+      - '/var/spool/mail'
+      - '/root/.bash_history'
+      - '/home/'
+      - '.bash_history'
+      - 'auth.log'
+      - 'syslog'
+      - 'messages'
+      - 'kern.log'
+  condition: selection_rm
+falsepositives:
+  - Log rotation (logrotate)
+  - Legitimate log management
+tags:
+  - attack.defense_evasion
+  - attack.t1070.002

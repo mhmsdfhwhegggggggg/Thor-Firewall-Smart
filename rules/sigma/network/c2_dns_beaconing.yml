@@ -1,0 +1,23 @@
+title: DNS C2 Beaconing Pattern
+id: a1b2c3d4-0014-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects DNS queries matching C2 beaconing patterns — long subdomain labels indicative of DNS tunneling
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: dns
+  product: linux
+detection:
+  selection:
+    dns.question.name|contains:
+      - '.onion.'
+      - '.bit.'
+      - '.bazar.'
+  selection_long:
+    dns.question.name|re: '([a-zA-Z0-9]{30,})\.'
+  condition: selection or selection_long
+tags:
+  - attack.command_and_control
+  - attack.t1071.004
+  - attack.t1568.002

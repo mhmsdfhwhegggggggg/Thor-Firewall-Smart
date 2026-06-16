@@ -86,3 +86,12 @@ impl IocDatabase {
     pub fn len(&self) -> usize { self.iocs.len() }
     pub fn is_empty(&self) -> bool { self.iocs.is_empty() }
 }
+
+    pub fn len(&self) -> usize {
+        self.iocs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.iocs.is_empty()
+    }
+}

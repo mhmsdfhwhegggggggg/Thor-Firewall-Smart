@@ -1,36 +1,55 @@
-// Removed missing features and inference
-pub mod gnn_detector; 
-pub mod llm_reporter; 
+//! Thor ML Engine — ONNX-based UEBA + Anomaly Detection
+//! Wraps ORT (ONNX Runtime) for real-time process/network scoring.
+//! Falls back to a dummy always-zero scorer if model isn't loaded.
+
+pub mod features;
+pub mod gnn_detector;
 pub mod ja4_analyzer;
 pub mod l7_analyzer;
+pub mod llm_reporter;
 pub mod onnx_scorer;
 
-use anyhow::Result; 
-use std::sync::Arc; 
-use tracing::info; 
-use self::gnn_detector::GnnChainDetector; 
-use self::llm_reporter::LlmReporter;
-use self::l7_analyzer::L7Analyzer;
+use anyhow::Result;
+use std::path::Path;
+use std::sync::Arc;
+use tracing::{info, warn};
 
-pub struct ThorAiCore { 
-    pub gnn: Option<Arc<GnnChainDetector>>, 
-    pub llm: Option<Arc<LlmReporter>>, 
-} 
+use crate::events::enrichment::EnrichedEvent;
+use crate::events::RawEvent;
 
-impl ThorAiCore { 
-    pub fn new(gnn_path: Option<&str>) -> Result<Self> { 
-        let mut gnn_engine = None; 
-        if let Some(path) = gnn_path { 
-            gnn_engine = Some(Arc::new(GnnChainDetector::new(path)?)); 
-        } 
+use self::features::extract_features;
+use self::onnx_scorer::OnnxScorer;
 
-        // تشغيل Local LLM يفترض أن المستخدم شغل: (ollama run phi3) 
-        let llm_reporter = Some(Arc::new(LlmReporter::new("http://localhost:11434", "phi3"))); 
+// ─── MlEngine ─────────────────────────────────────────────────────────────────
 
-        info!(" Thor AI Core initialized successfully."); 
-        Ok(Self { 
-            gnn: gnn_engine, 
-            llm: llm_reporter, 
-        }) 
-    } 
+pub struct MlEngine {
+    scorer: Option<Arc<OnnxScorer>>,
+    loaded: bool,
+}
+
+impl MlEngine {
+    pub fn new(model_path: &Path) -> Result<Self> {
+        if !model_path.exists() {
+            return Err(anyhow::anyhow!("Model not found: {:?}", model_path));
+        }
+        let scorer = OnnxScorer::load(model_path)?;
+        info!("🤖 ML engine: ONNX model loaded from {:?}", model_path);
+        Ok(Self { scorer: Some(Arc::new(scorer)), loaded: true })
+    }
+
+    /// Dummy scorer — always returns None (rule-only mode)
+    pub fn dummy() -> Self {
+        Self { scorer: None, loaded: false }
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
+    }
+
+    /// Score an event for anomaly. Returns Some(0.0..1.0) or None if unavailable.
+    pub async fn score(&self, event: &EnrichedEvent) -> Option<f32> {
+        let scorer = self.scorer.as_ref()?;
+        let features = extract_features(event);
+        scorer.score(&features).ok()
+    }
 }

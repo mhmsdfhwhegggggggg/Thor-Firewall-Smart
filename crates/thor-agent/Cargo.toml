@@ -9,61 +9,75 @@ name = "thor-agent"
 path = "src/main.rs"
 
 [dependencies]
-# Workspace deps
-tokio = { workspace = true }
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
+# ── Workspace shared ──────────────────────────────────────────────────────────
+tokio             = { workspace = true }
+anyhow            = { workspace = true }
+thiserror         = { workspace = true }
+tracing           = { workspace = true }
 tracing-subscriber = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-serde_yaml = { workspace = true }
-chrono = { workspace = true }
-axum = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
-dashmap = { workspace = true }
-flume = { workspace = true }
-crossbeam = { workspace = true }
-parking_lot = { workspace = true }
-aya = { workspace = true }
-ort = { version = "2.0.0-rc.4", features = ["load-dynamic", "download-binaries"] }
-ndarray = { version = "0.15", features = ["rayon"] }
-ipnetwork = { workspace = true }
-bytes = "1.5"
-ahocorasick = { workspace = true }
-yara = { workspace = true }
-bloomfilter = { workspace = true }
-walkdir = { workspace = true }
-utoipa = { workspace = true }
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+serde_yaml        = { workspace = true }
+chrono            = { workspace = true }
+axum              = { workspace = true }
+tower             = { workspace = true }
+tower-http        = { workspace = true }
+dashmap           = { workspace = true }
+flume             = { workspace = true }
+crossbeam         = { workspace = true }
+parking_lot       = { workspace = true }
+aya               = { workspace = true }
+ipnetwork         = { workspace = true }
+ahocorasick       = { workspace = true }
+yara              = { workspace = true }
+bloomfilter       = { workspace = true }
+walkdir           = { workspace = true }
+utoipa            = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
-futures = { workspace = true }
-nix = { workspace = true }
-sha2 = { workspace = true }
-rayon = { workspace = true }
-num_cpus = "1.16"
-libc = { workspace = true }
+futures           = { workspace = true }
+nix               = { workspace = true }
+sha2              = { workspace = true }
+rayon             = { workspace = true }
+libc              = { workspace = true }
 
-# Workspace crates
+# ── ML / Inference ────────────────────────────────────────────────────────────
+ort     = { version = "2.0.0-rc.4", features = ["load-dynamic", "download-binaries"] }
+ndarray = { version = "0.15", features = ["rayon"] }
+
+# ── Workspace crates ──────────────────────────────────────────────────────────
 thor-common = { path = "../thor-common" }
-thor-bpf = { path = "../thor-bpf" }
+thor-bpf    = { path = "../thor-bpf" }
 
-# Additional agent-only deps
+# ── Agent-specific ────────────────────────────────────────────────────────────
 tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
-hex = "0.4"
-regex = "1.10"
-uuid = { version = "1.8", features = ["v4"] }
-config = { version = "0.14", features = ["yaml"] }
-clap = { version = "4.5", features = ["derive", "env"] }
-tls-parser = "0.11"
-jsonwebtoken = "9.3"
-sled = "0.34"
-sysinfo = "0.30"
-tonic = { version = "0.11", features = ["tls", "transport"] }
-tokio-rustls = "0.25"
-rustls = { version = "0.22", features = ["ring"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
-aya-log = "0.2"
+hex               = "0.4"
+regex             = "1.10"
+uuid              = { version = "1.8", features = ["v4"] }
+config            = { version = "0.14", features = ["yaml"] }
+clap              = { version = "4.5", features = ["derive", "env"] }
+tls-parser        = "0.11"
+jsonwebtoken      = "9.3"
+sled              = "0.34"
+sysinfo           = "0.30"
+tonic             = { version = "0.11", features = ["tls", "transport"] }
+tokio-rustls      = "0.25"
+rustls            = { version = "0.22", features = ["ring"] }
+reqwest           = { version = "0.12", features = ["json", "rustls-tls", "gzip", "deflate"] }
+aya-log           = "0.2"
+bytes             = "1.5"
+num_cpus          = "1.16"
+
+# ── NEW: Phase 1 additions ────────────────────────────────────────────────────
+# Fast file hashing (10× faster than SHA256)
+blake3            = "1.5"
+# Hostname resolution for alert enrichment
+hostname          = "0.4"
+# Structured logging to files
+tracing-appender  = "0.2"
+# PCRE-compatible regex for IDS rules
+regex             = "1.10"
+# For mimalloc global allocator
+mimalloc          = { version = "0.1", default-features = false }
 
 [build-dependencies]
 # Nothing extra

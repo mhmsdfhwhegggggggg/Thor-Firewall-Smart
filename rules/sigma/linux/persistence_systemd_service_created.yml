@@ -1,0 +1,26 @@
+title: New Systemd Service Unit Created
+id: a1b2c3d4-0006-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects creation of new systemd service units outside of package managers
+level: medium
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|endswith: '.service'
+    TargetFilename|contains:
+      - '/etc/systemd/system/'
+      - '/usr/local/lib/systemd/'
+      - '/home/'
+      - '/tmp/'
+      - '/var/tmp/'
+  condition: selection
+falsepositives:
+  - Package installations
+  - Legitimate service deployments
+tags:
+  - attack.persistence
+  - attack.t1543.002

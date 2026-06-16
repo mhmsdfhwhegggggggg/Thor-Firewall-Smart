@@ -18,3 +18,5 @@ pub mod xdp_drop;
 pub mod process_monitor;
 #[cfg(not(target_arch = "bpf"))]
 pub mod network_correlator;
+#[cfg(not(target_arch = "bpf"))]
+pub mod fim_monitor;

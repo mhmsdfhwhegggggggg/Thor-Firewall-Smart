@@ -1,0 +1,28 @@
+title: Cryptocurrency Miner Execution
+id: a1b2c3d4-0031-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects execution of cryptocurrency mining software — common post-exploitation impact
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'xmrig'
+      - 'xmr-stak'
+      - 'cpuminer'
+      - '--stratum'
+      - 'mining.subscribe'
+      - 'stratum+tcp'
+      - 'pool.minexmr'
+      - 'xmrpool'
+      - 'moneroocean'
+      - 'nanopool.org'
+      - 'c3pool.com'
+  condition: selection
+tags:
+  - attack.impact
+  - attack.t1496

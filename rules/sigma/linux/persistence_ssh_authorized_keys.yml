@@ -1,0 +1,25 @@
+title: SSH Authorized Keys Modification
+id: a1b2c3d4-0005-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects modification of SSH authorized_keys files — common persistence technique
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '.ssh/authorized_keys'
+      - '.ssh/authorized_keys2'
+      - '/etc/ssh/authorized_keys'
+  condition: selection
+falsepositives:
+  - Legitimate SSH key management
+  - Configuration management tools
+tags:
+  - attack.persistence
+  - attack.t1098.004
+  - attack.lateral_movement
+  - attack.t1021.004

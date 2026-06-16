@@ -1,0 +1,24 @@
+title: Suspicious TLS SNI — Known Malware Infrastructure
+id: a1b2c3d4-0028-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects TLS connections to domains known to host malware infrastructure
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: tls
+  product: linux
+detection:
+  selection:
+    tls.sni|contains:
+      - '.top'
+      - 'update-service'
+      - 'cdn-service'
+      - 'api-gateway-prod'
+  selection_dga:
+    tls.sni|re: '^[a-z0-9]{15,30}\.(top|xyz|click|download|win)$'
+  condition: selection or selection_dga
+tags:
+  - attack.command_and_control
+  - attack.t1071.001
+  - attack.t1568.002

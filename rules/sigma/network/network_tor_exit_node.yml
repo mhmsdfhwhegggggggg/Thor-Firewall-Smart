@@ -1,0 +1,23 @@
+title: Connection to Tor Exit Node
+id: a1b2c3d4-0019-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects outbound connection to known Tor exit nodes — possible C2 or data exfiltration
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  selection:
+    dst_port:
+      - 9001
+      - 9030
+      - 9050
+      - 9051
+      - 9150
+      - 9151
+  condition: selection
+tags:
+  - attack.command_and_control
+  - attack.t1090.003

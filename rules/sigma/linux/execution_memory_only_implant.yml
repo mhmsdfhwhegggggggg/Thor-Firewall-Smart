@@ -1,0 +1,24 @@
+title: Memory-Only Implant Indicators (Fileless Malware)
+id: a1b2c3d4-0033-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects common fileless malware execution patterns using memfd_create and process memory injection
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'memfd_create'
+      - 'process_vm_writev'
+      - '/proc/self/mem'
+      - '/proc/self/fd/'
+      - 'ptrace PTRACE_POKETEXT'
+      - 'ddexec'
+  condition: selection
+tags:
+  - attack.defense_evasion
+  - attack.t1055
+  - attack.t1620

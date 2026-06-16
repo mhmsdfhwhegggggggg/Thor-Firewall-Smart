@@ -1,0 +1,40 @@
+title: Reverse Shell Indicator Detected
+id: a1b2c3d4-0013-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects common reverse shell payloads in command execution
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_bash_rev:
+    CommandLine|contains:
+      - 'bash -i >& /dev/tcp/'
+      - '0>&1'
+      - '/dev/tcp/'
+      - 'bash -i >& /dev/udp/'
+  selection_nc_rev:
+    CommandLine|contains:
+      - 'nc -e /bin/bash'
+      - 'nc -e /bin/sh'
+      - 'ncat -e /bin/bash'
+      - 'ncat -e /bin/sh'
+      - 'nc -lvp'
+      - 'mkfifo /tmp/'
+  selection_python_rev:
+    CommandLine|contains:
+      - 'socket.socket'
+      - 'os.dup2'
+      - 'subprocess.call'
+      - 'pty.spawn'
+  selection_perl_rev:
+    CommandLine|contains:
+      - 'perl -e'
+      - 'IO::Socket::INET'
+  condition: selection_bash_rev or selection_nc_rev or selection_python_rev or selection_perl_rev
+tags:
+  - attack.command_and_control
+  - attack.t1059.004
+  - attack.execution

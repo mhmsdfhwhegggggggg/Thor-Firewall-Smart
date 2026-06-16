@@ -1,0 +1,27 @@
+title: PowerShell Encoded Command Execution
+id: a1b2c3d4-0025-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects PowerShell with encoded command flags — common malware technique
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    Image|endswith:
+      - '\powershell.exe'
+      - '\pwsh.exe'
+    CommandLine|contains:
+      - '-EncodedCommand'
+      - '-enc '
+      - '-ec '
+      - '-EnC '
+      - '-eNc '
+  condition: selection
+tags:
+  - attack.execution
+  - attack.defense_evasion
+  - attack.t1059.001
+  - attack.t1027

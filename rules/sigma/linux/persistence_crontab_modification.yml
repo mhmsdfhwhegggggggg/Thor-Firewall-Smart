@@ -1,0 +1,25 @@
+title: Crontab Modification for Persistence
+id: a1b2c3d4-0004-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects modification of crontab files for establishing persistence
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/etc/cron'
+      - '/var/spool/cron'
+      - '/etc/anacrontab'
+  filter:
+    User: 'root'
+    CommandLine|contains: 'crontab -l'
+  condition: selection and not filter
+falsepositives:
+  - Legitimate cron job administration
+tags:
+  - attack.persistence
+  - attack.t1053.003

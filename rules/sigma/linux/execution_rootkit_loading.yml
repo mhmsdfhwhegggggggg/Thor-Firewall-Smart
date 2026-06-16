@@ -1,0 +1,25 @@
+title: Kernel Module Loading (Potential Rootkit)
+id: a1b2c3d4-0023-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects insmod/modprobe calls that could indicate kernel rootkit loading
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+      - '/insmod'
+      - '/modprobe'
+    CommandLine|contains:
+      - '/tmp/'
+      - '/dev/shm/'
+      - '/var/tmp/'
+      - '.ko'
+  condition: selection
+tags:
+  - attack.defense_evasion
+  - attack.t1014
+  - attack.persistence

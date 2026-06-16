@@ -1,0 +1,28 @@
+title: Port Sweep / Host Scan Detected
+id: a1b2c3d4-0018-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects rapid connection attempts to multiple ports on one or more hosts
+level: medium
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  selection:
+    dst_port:
+      - 21
+      - 22
+      - 23
+      - 25
+      - 80
+      - 443
+      - 445
+      - 3389
+      - 3306
+      - 5432
+    connection_count|gte: 20
+  condition: selection
+tags:
+  - attack.discovery
+  - attack.t1046

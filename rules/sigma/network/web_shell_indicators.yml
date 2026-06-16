@@ -1,0 +1,26 @@
+title: Web Shell HTTP Request Patterns
+id: a1b2c3d4-0029-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects HTTP requests matching web shell command execution patterns
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: http
+  product: linux
+detection:
+  selection:
+    http.request.body|contains:
+      - 'cmd='
+      - 'exec='
+      - 'system('
+      - 'passthru('
+      - 'shell_exec('
+      - 'eval(base64_decode'
+      - 'eval(gzinflate'
+  condition: selection
+tags:
+  - attack.persistence
+  - attack.t1505.003
+  - attack.execution
+  - attack.t1059.004

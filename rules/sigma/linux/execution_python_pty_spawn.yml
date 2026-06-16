@@ -1,0 +1,23 @@
+title: Python PTY Spawn (Shell Stabilization)
+id: a1b2c3d4-0017-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects Python PTY shell spawn technique used to upgrade dumb shells
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'python -c import pty'
+      - 'python3 -c import pty'
+      - "pty.spawn('/bin/bash')"
+      - "pty.spawn('/bin/sh')"
+      - 'python -c "import pty'
+      - "python3 -c 'import pty"
+  condition: selection
+tags:
+  - attack.execution
+  - attack.t1059.006

@@ -1,0 +1,33 @@
+title: Living-off-the-Land Binaries (LOLBins) Abuse
+id: a1b2c3d4-0015-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects abuse of legitimate Linux binaries for malicious purposes
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_download:
+    CommandLine|contains:
+      - 'curl -o /tmp/'
+      - 'wget -O /tmp/'
+      - 'curl http'
+      - 'wget http'
+      - 'python -c'
+      - 'python3 -c'
+      - 'php -r'
+      - 'ruby -e'
+      - 'perl -e'
+  selection_exec_from_tmp:
+    CommandLine|contains:
+      - '/tmp/'
+      - '/dev/shm/'
+      - '/var/tmp/'
+  condition: selection_download and selection_exec_from_tmp
+tags:
+  - attack.execution
+  - attack.defense_evasion
+  - attack.t1059
+  - attack.t1105

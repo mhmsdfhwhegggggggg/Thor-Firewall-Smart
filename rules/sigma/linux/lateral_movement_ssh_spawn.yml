@@ -1,0 +1,28 @@
+title: Lateral Movement via SSH
+id: a1b2c3d4-0012-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects SSH connections spawning interactive shells on remote hosts — lateral movement indicator
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    ParentImage|endswith:
+      - '/sshd'
+    Image|endswith:
+      - '/bash'
+      - '/sh'
+      - '/dash'
+      - '/zsh'
+  filter:
+    User|contains:
+      - 'service'
+      - 'nobody'
+      - 'sshd'
+  condition: selection and not filter
+tags:
+  - attack.lateral_movement
+  - attack.t1021.004

@@ -1,8 +1,10 @@
-//! Detection engine — Sigma, YARA, IOC, and ML-based threat detection
+//! Detection Engine — unified threat detection:
+//! Sigma (condition-aware), YARA, IOC, ML/ONNX, IDS (Suricata-compatible), FIM
 
-pub mod sigma;
-pub mod yara;
 pub mod ioc_check;
+pub mod sigma;
+pub mod sigma_compiler;
+pub mod yara;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -11,59 +13,77 @@ use tracing::{info, warn};
 
 use crate::events::{Alert, RuleType};
 use crate::events::enrichment::EnrichedEvent;
+use crate::ids::IdsEngine;
 use crate::ml::MlEngine;
 use thor_common::ThreatLevel;
 
+use ioc_check::IocChecker;
 use sigma::SigmaEngine;
 use yara::YaraEngine;
-use ioc_check::IocChecker;
 
 pub struct DetectionEngine {
-    sigma: SigmaEngine,
-    yara: YaraEngine,
+    sigma:       SigmaEngine,
+    yara:        YaraEngine,
     ioc_checker: IocChecker,
-    ml: Arc<MlEngine>,
+    ids:         Arc<IdsEngine>,
+    ml:          Arc<MlEngine>,
 }
 
 impl DetectionEngine {
     pub fn new(
         sigma_rules_dir: &Path,
         yara_rules_dir: &Path,
+        ids_rules_dir: &Path,
         ml: Arc<MlEngine>,
     ) -> Result<Self> {
         let sigma = SigmaEngine::load(sigma_rules_dir)
             .map_err(|e| { warn!("Sigma load error: {}", e); e })?;
+
         let yara = YaraEngine::load(yara_rules_dir)
             .map_err(|e| { warn!("YARA load error: {}", e); e })?;
+
         let ioc_checker = IocChecker::new();
-        info!("🔍 Detection engine initialized");
-        Ok(Self { sigma, yara, ioc_checker, ml })
+
+        let ids = Arc::new(IdsEngine::load_from_dir(ids_rules_dir));
+
+        info!(
+            "🔍 Detection engine initialized — Sigma:{} YARA:{} IDS:{}",
+            sigma.rule_count(),
+            yara.rule_count(),
+            ids.rule_count(),
+        );
+
+        Ok(Self { sigma, yara, ioc_checker, ids, ml })
     }
 
     pub async fn detect(&self, event: &EnrichedEvent) -> Result<Vec<Alert>> {
         let mut alerts = Vec::new();
 
-        // 1. Sigma rule matching
-        if let Some(mut alert) = self.sigma.check(event) {
+        // 1. Sigma rule matching (full condition parser)
+        if let Some(alert) = self.sigma.check(event) {
             alerts.push(alert);
         }
 
-        // 2. IOC check
+        // 2. IOC check (Bloom + DashMap)
         if let Some(alert) = self.ioc_checker.check(event) {
             alerts.push(alert);
         }
 
-        // 3. YARA scan (CPU-heavy — spawn_blocking)
+        // 3. IDS rules (Suricata-compatible)
+        let ids_alerts = self.ids.scan(event);
+        alerts.extend(ids_alerts);
+
+        // 4. YARA scan (CPU-heavy — run in spawn_blocking)
         let yara_alerts = tokio::task::spawn_blocking({
             let yara = self.yara.clone();
-            let event_clone = event.clone();
-            move || yara.scan(&event_clone)
+            let ev   = event.clone();
+            move || yara.scan(&ev)
         }).await.unwrap_or_default();
         alerts.extend(yara_alerts);
 
-        // 4. ML anomaly detection
+        // 5. ML anomaly detection
         if let Some(score) = self.ml.score(event).await {
-            if score > 0.7 {
+            if score > 0.70 {
                 alerts.push(Alert {
                     id: uuid::Uuid::new_v4().to_string(),
                     timestamp: chrono::Utc::now(),
@@ -71,7 +91,11 @@ impl DetectionEngine {
                     rule_name: "ML:AnomalyScore".to_string(),
                     rule_type: RuleType::Ml,
                     threat_level: ThreatLevel::from_score(score),
-                    description: format!("ML anomaly score: {:.3}", score),
+                    description: format!(
+                        "ML anomaly score: {:.3} (threshold: 0.70) — {}",
+                        score,
+                        classify_anomaly(score)
+                    ),
                     pid: None,
                     process_name: None,
                     src_ip: event.src_ip_str.clone(),
@@ -88,5 +112,13 @@ impl DetectionEngine {
     }
 
     pub fn sigma_rule_count(&self) -> usize { self.sigma.rule_count() }
-    pub fn yara_rule_count(&self) -> usize { self.yara.rule_count() }
+    pub fn yara_rule_count(&self)  -> usize { self.yara.rule_count() }
+    pub fn ids_rule_count(&self)   -> usize { self.ids.rule_count() }
+}
+
+fn classify_anomaly(score: f32) -> &'static str {
+    if score >= 0.95 { "Likely attack in progress" }
+    else if score >= 0.85 { "Highly suspicious behavior" }
+    else if score >= 0.70 { "Anomalous activity" }
+    else { "Low anomaly" }
 }

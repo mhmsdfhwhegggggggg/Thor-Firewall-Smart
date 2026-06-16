@@ -1,0 +1,33 @@
+title: Sudo Privilege Escalation Attempt
+id: a1b2c3d4-0007-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects suspicious sudo command execution patterns that indicate privilege escalation
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'sudo -l'
+      - 'sudo su'
+      - 'sudo -i'
+      - 'sudo -s'
+      - 'sudo /bin/bash'
+      - 'sudo /bin/sh'
+      - 'sudo python'
+      - 'sudo perl'
+      - 'sudo vim'
+      - 'sudo less'
+      - 'sudo more'
+      - 'sudo awk'
+      - 'sudo nmap'
+      - 'sudo nano'
+  condition: selection
+falsepositives:
+  - Legitimate system administration
+tags:
+  - attack.privilege_escalation
+  - attack.t1548.003

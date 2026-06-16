@@ -1,68 +1,78 @@
-//! Feature extractor — converts raw events to 32-dimensional float vectors for ONNX
+//! Feature extraction for ML scoring — 28 features per event
 
-use ndarray::Array1;
 use crate::events::enrichment::EnrichedEvent;
 use crate::events::RawEvent;
-use super::FEATURE_DIMENSION;
+use chrono::Timelike;
 
-pub struct FeatureExtractor;
+pub const N_FEATURES: usize = 28;
 
-impl FeatureExtractor {
-    pub fn new() -> Self { Self }
+pub fn extract_features(event: &EnrichedEvent) -> Vec<f32> {
+    let mut f = vec![0.0f32; N_FEATURES];
+    let now = chrono::Utc::now();
+    let hour = now.hour() as f32;
 
-    /// Extract FEATURE_DIMENSION-dimensional feature vector from an enriched event
-    /// Returns None if the event type doesn't support ML scoring
-    pub fn extract(&self, event: &EnrichedEvent) -> Option<Array1<f32>> {
-        let mut features = vec![0.0f32; FEATURE_DIMENSION];
-
-        match &event.raw {
-            RawEvent::Network(e) => {
-                // [0] Event type indicator (0=network, 1=process, 2=xdp)
-                features[0] = 0.0;
-                // [1] Destination port normalized (0-65535 → 0-1)
-                features[1] = e.dst_port as f32 / 65535.0;
-                // [2] Protocol (TCP=6→0.5, UDP=17→0.85, other→0)
-                features[2] = match e.protocol { 6 => 0.5, 17 => 0.85, _ => 0.0 };
-                // [3] Direction (0=inbound, 1=outbound)
-                features[3] = 1.0; // Network events are outbound
-                // [4] Is RFC1918 destination
-                features[4] = if event.is_internal { 1.0 } else { 0.0 };
-                // [5] UID normalized
-                features[5] = (e.uid as f32 / 65535.0).min(1.0);
-                // [6] PID normalized
-                features[6] = (e.pid as f32 / 100000.0).min(1.0);
-                // [7] Hour of day (0-23 → 0-1)
-                features[7] = chrono::Utc::now().format("%H").to_string().parse::<f32>().unwrap_or(0.0) / 23.0;
-                // [8-15] Destination IP octets normalized
-                let dst_octets = e.dst_ip.octets();
-                for (i, &octet) in dst_octets.iter().enumerate().take(4) {
-                    features[8 + i] = octet as f32 / 255.0;
-                }
-                // [12-15] Comm hash (poor man's encoding)
-                let comm_bytes = e.comm.as_bytes();
-                for (i, &b) in comm_bytes.iter().enumerate().take(4) {
-                    features[12 + i] = b as f32 / 255.0;
-                }
-                // [16-31] Reserved for flow statistics (packet rate, byte rate, etc.)
-                // In production these would be populated from ThorState flows
-            }
-            RawEvent::Process(e) => {
-                features[0] = 1.0; // Process event
-                features[1] = (e.pid() as f32 / 100000.0).min(1.0);
-                features[7] = chrono::Utc::now().format("%H").to_string().parse::<f32>().unwrap_or(0.0) / 23.0;
-            }
-            RawEvent::XdpDrop { src_port, dst_port, reason, src_ip, .. } => {
-                features[0] = 2.0; // XDP event
-                features[1] = *dst_port as f32 / 65535.0;
-                features[2] = *src_port as f32 / 65535.0;
-                features[3] = *reason as f32 / 3.0;
-                let src_octets: [u8; 4] = src_ip.to_be_bytes();
-                for (i, &octet) in src_octets.iter().enumerate().take(4) {
-                    features[4 + i] = octet as f32 / 255.0;
-                }
+    match &event.raw {
+        RawEvent::Process(e) => {
+            f[0] = (e.pid as f32) / 65535.0;
+            f[1] = 0.1; // ppid placeholder
+            f[2] = ((e.cmdline.len() as f32 + 1.0).ln()).min(10.0);
+            f[3] = e.cmdline.split_whitespace().count() as f32;
+            f[4] = if e.cmdline.contains("base64") { 1.0 } else { 0.0 };
+            f[5] = if e.cmdline.contains('|') { 1.0 } else { 0.0 };
+            f[6] = if e.cmdline.contains("/dev/tcp") { 1.0 } else { 0.0 };
+            f[7] = if e.cmdline.starts_with("/tmp/") || e.cmdline.starts_with("/dev/shm") { 1.0 } else { 0.0 };
+            let pname = e.parent_name.as_deref().unwrap_or("");
+            f[8] = if pname.ends_with("bash") || pname.ends_with("sh") || pname.ends_with("zsh") { 1.0 } else { 0.0 };
+            f[9] = if pname.contains("apache") || pname.contains("nginx") || pname.contains("php") { 1.0 } else { 0.0 };
+            f[10] = if e.uid == 0 { 1.0 } else { 0.0 };
+            f[11] = 0.0; // suid: need metadata
+        }
+        RawEvent::Network(e) => {
+            f[12] = (e.dst_port as f32) / 65535.0;
+            f[13] = if let Some(ip) = event.dst_ip_str.as_deref() {
+                is_internal_ip(ip) as u8 as f32
+            } else { 0.0 };
+            // IOC hit
+            f[15] = if event.ioc_matched { 1.0 } else { 0.0 };
+            f[18] = ((e.bytes_out as f32 + 1.0).ln()).min(20.0);
+            f[19] = ((e.bytes_in as f32 + 1.0).ln()).min(20.0);
+            // Protocol one-hot
+            match e.protocol.as_str() {
+                "TCP"  => f[21] = 1.0,
+                "UDP"  => f[22] = 1.0,
+                "ICMP" => f[23] = 1.0,
+                "DNS"  => f[24] = 1.0,
+                "TLS"  => f[25] = 1.0,
+                _ => {}
             }
         }
+        RawEvent::Dns(e) => {
+            f[12] = 53.0 / 65535.0;
+            f[24] = 1.0;
+        }
+        _ => {}
+    }
 
-        Some(Array1::from_vec(features))
+    // Temporal features (cyclical encoding)
+    f[26] = (hour * 2.0 * std::f32::consts::PI / 24.0).sin();
+    f[27] = (hour * 2.0 * std::f32::consts::PI / 24.0).cos();
+
+    f
+}
+
+fn is_internal_ip(ip: &str) -> bool {
+    if let Ok(addr) = ip.parse::<std::net::IpAddr>() {
+        match addr {
+            std::net::IpAddr::V4(v4) => {
+                let octets = v4.octets();
+                octets[0] == 10
+                || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 168)
+                || octets[0] == 127
+            }
+            _ => false,
+        }
+    } else {
+        false
     }
 }

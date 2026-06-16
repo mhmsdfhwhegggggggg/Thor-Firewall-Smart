@@ -1,0 +1,31 @@
+title: Container Escape Attempt
+id: a1b2c3d4-0030-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects techniques used to escape container environments
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_docker_socket:
+    CommandLine|contains:
+      - '/var/run/docker.sock'
+      - 'docker run --privileged'
+      - '--cap-add=SYS_ADMIN'
+      - '--security-opt=seccomp:unconfined'
+      - '--pid=host'
+      - '--network=host'
+      - '--ipc=host'
+  selection_mount:
+    CommandLine|contains:
+      - 'mount /dev/'
+      - 'cgroup release_agent'
+      - 'nsenter --target 1'
+      - 'nsenter -t 1'
+  condition: selection_docker_socket or selection_mount
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+  - attack.defense_evasion

@@ -1,0 +1,28 @@
+title: Shell History Cleared
+id: a1b2c3d4-0010-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects shell history deletion or disabling — anti-forensics technique
+level: medium
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'history -c'
+      - 'history -w /dev/null'
+      - 'unset HISTFILE'
+      - 'HISTFILESIZE=0'
+      - 'HISTSIZE=0'
+      - 'export HISTFILE=/dev/null'
+      - '> ~/.bash_history'
+      - 'truncate -s 0'
+      - 'set +o history'
+  condition: selection
+falsepositives:
+  - Some automation scripts
+tags:
+  - attack.defense_evasion
+  - attack.t1070.003

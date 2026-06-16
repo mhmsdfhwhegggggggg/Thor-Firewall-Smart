@@ -1,0 +1,26 @@
+title: LD_PRELOAD Library Injection for Persistence
+id: a1b2c3d4-0034-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects use of LD_PRELOAD environment variable to inject malicious shared libraries
+level: critical
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'LD_PRELOAD='
+      - 'LD_LIBRARY_PATH='
+  selection_suspicious_path:
+    CommandLine|contains:
+      - '/tmp/'
+      - '/dev/shm/'
+      - '/var/tmp/'
+      - '.so'
+  condition: selection and selection_suspicious_path
+tags:
+  - attack.defense_evasion
+  - attack.t1574.006
+  - attack.persistence

@@ -1,0 +1,36 @@
+title: Data Exfiltration via curl or wget
+id: a1b2c3d4-0020-4e5f-a6b7-c8d9e0f1a2b3
+status: stable
+description: Detects use of curl/wget to upload sensitive data to external servers
+level: high
+author: Thor Security Team
+date: 2024-01-01
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_upload:
+    Image|endswith:
+      - '/curl'
+      - '/wget'
+    CommandLine|contains:
+      - '-T '
+      - '--upload-file'
+      - '-d @'
+      - '--data @'
+      - '--data-binary @'
+      - 'POST'
+      - '-X PUT'
+  selection_sensitive:
+    CommandLine|contains:
+      - '/etc/shadow'
+      - '/etc/passwd'
+      - '.ssh/'
+      - '.aws/credentials'
+      - '.kube/config'
+      - 'id_rsa'
+      - 'credentials'
+  condition: selection_upload or selection_sensitive
+tags:
+  - attack.exfiltration
+  - attack.t1048.003
