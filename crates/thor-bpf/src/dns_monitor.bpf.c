@@ -68,9 +68,11 @@ struct {
     __type(value, __u64);
 } dns_rate_limit_v6 SEC(".maps");
 
-/* Blocklist of known bad DNS query substrings (label hash) */
+/* Blocklist of known bad DNS query substrings (label hash).
+ * LRU_HASH: auto-evicts oldest entries when capacity is reached,
+ * preventing unbounded memory growth without manual cleanup. */
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 10000);
     __type(key, __u64);
     __type(value, __u8);
