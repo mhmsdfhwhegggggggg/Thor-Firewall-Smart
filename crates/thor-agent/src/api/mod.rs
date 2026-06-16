@@ -20,6 +20,7 @@ pub mod handlers;
 pub mod ws;
 pub mod rate_limit;
 pub mod validation;
+pub mod forensics_api;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -36,6 +37,10 @@ use crate::siem::SiemExporter;
 
 use auth_middleware::{require_auth, require_analyst_auth, require_admin_auth};
 use rate_limit::{rate_limit_login, rate_limit_api};
+use forensics_api::{
+    run_thorql_query, run_artifact_handler, list_artifacts,
+    collect_files, scan_process_memory,
+};
 
 // ─── Shared API state ─────────────────────────────────────────────────────────
 
@@ -108,6 +113,38 @@ pub async fn start_api_server(addr: SocketAddr, api_state: ApiState) {
         .route(
             "/api/v1/ioc/add",
             post(handlers::add_ioc)
+                .route_layer(middleware::from_fn(require_admin_auth))
+                .route_layer(middleware::from_fn(rate_limit_api)),
+        )
+
+        // ── Axis 3: DFIR / Forensics (Analyst+) ──────────────────────────────
+        .route(
+            "/api/v1/forensics/query",
+            post(run_thorql_query)
+                .route_layer(middleware::from_fn(require_analyst_auth))
+                .route_layer(middleware::from_fn(rate_limit_api)),
+        )
+        .route(
+            "/api/v1/forensics/artifact",
+            post(run_artifact_handler)
+                .route_layer(middleware::from_fn(require_analyst_auth))
+                .route_layer(middleware::from_fn(rate_limit_api)),
+        )
+        .route(
+            "/api/v1/forensics/artifacts",
+            get(list_artifacts)
+                .route_layer(middleware::from_fn(require_analyst_auth))
+                .route_layer(middleware::from_fn(rate_limit_api)),
+        )
+        .route(
+            "/api/v1/forensics/collect",
+            post(collect_files)
+                .route_layer(middleware::from_fn(require_admin_auth))
+                .route_layer(middleware::from_fn(rate_limit_api)),
+        )
+        .route(
+            "/api/v1/forensics/scan/memory",
+            post(scan_process_memory)
                 .route_layer(middleware::from_fn(require_admin_auth))
                 .route_layer(middleware::from_fn(rate_limit_api)),
         )
