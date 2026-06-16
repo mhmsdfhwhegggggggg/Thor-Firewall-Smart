@@ -5,6 +5,7 @@ members = [
     "crates/thor-bpf",
     "crates/thor-agent",
     "crates/thor-script",
+    "crates/thor-ids",
 ]
 
 [workspace.package]
@@ -77,6 +78,10 @@ hostname = "0.4"
 uuid     = { version = "1.8", features = ["v4"] }
 regex    = "1.10"
 mimalloc = { version = "0.1", default-features = false }
+
+# ── Continuous learning
+rusqlite = { version = "0.31", features = ["bundled"] }
+tempfile  = "3"
 
 # ── Phase 2: Axis 2 additions ──────────────────────────────────────────────────
 once_cell = "1.19"

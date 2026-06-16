@@ -1,0 +1,50 @@
+title: Curl or Wget Pipeline Execution [v26]
+id: thor-2026-lolbas-0208
+status: experimental
+description: >
+  Detects downloading and immediately executing remote scripts. Variant 26 of this detection covering
+  slight behavioral differences in modern lolbas threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1059/
+  - https://thor-security.io/rules/2026/lolbas
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.execution
+  - attack.t1059
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'curl.*|.*sh'
+      - 'wget.*-O.*-.*|.*bash'
+      - 'curl -s.*|python'
+      - 'fetch.*|sh'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: critical

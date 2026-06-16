@@ -1,0 +1,50 @@
+title: Malicious npm postinstall Shell Execution [v4]
+id: thor-2026-supply-chain-0025
+status: experimental
+description: >
+  Detects suspicious shell commands in npm package postinstall hooks. Variant 4 of this detection covering
+  slight behavioral differences in modern supply chain threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1195/
+  - https://thor-security.io/rules/2026/supply_chain
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.initial_access
+  - attack.t1195
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'node-gyp-build'
+      - 'curl|sh'
+      - 'wget|bash'
+      - 'exec(Buffer.from'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: high

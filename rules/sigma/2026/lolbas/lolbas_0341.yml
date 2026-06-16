@@ -1,0 +1,49 @@
+title: Python PTY Spawn for Shell Upgrade [v43]
+id: thor-2026-lolbas-0341
+status: experimental
+description: >
+  Detects Python one-liners used to spawn interactive PTY shells. Variant 43 of this detection covering
+  slight behavioral differences in modern lolbas threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1059/
+  - https://thor-security.io/rules/2026/lolbas
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.execution
+  - attack.t1059
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'import pty; pty.spawn'
+      - 'os.execvpe("/bin/bash"'
+      - 'python -c "import pty'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: high

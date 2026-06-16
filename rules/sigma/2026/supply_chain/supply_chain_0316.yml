@@ -1,0 +1,50 @@
+title: Kubernetes IRSA Token Theft for Cloud Access [v40]
+id: thor-2026-supply-chain-0316
+status: experimental
+description: >
+  Detects excessive use of K8s service account tokens for cloud API access. Variant 40 of this detection covering
+  slight behavioral differences in modern supply chain threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1552/
+  - https://thor-security.io/rules/2026/supply_chain
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.credential_access
+  - attack.t1552
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'cat /var/run/secrets/kubernetes.io'
+      - 'AWS_ROLE_ARN'
+      - 'AZURE_FEDERATED_TOKEN_FILE'
+      - 'GOOGLE_APPLICATION_CREDENTIALS'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: high

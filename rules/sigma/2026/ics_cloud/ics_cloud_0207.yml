@@ -1,0 +1,50 @@
+title: OT Protocol Tunnel over HTTP/HTTPS [v26]
+id: thor-2026-ics-cloud-0207
+status: experimental
+description: >
+  Detects industrial control protocol data tunneled through web traffic. Variant 26 of this detection covering
+  slight behavioral differences in modern ics cloud threat actors.
+references:
+  - https://attack.mitre.org/techniques/T0884/
+  - https://thor-security.io/rules/2026/ics_cloud
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.command_and_control
+  - attack.t0884
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'X-Modbus-Frame'
+      - 'X-DNP3-Payload'
+      - 'OT-Protocol: modbus'
+      - 'X-ICS-Command'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: high

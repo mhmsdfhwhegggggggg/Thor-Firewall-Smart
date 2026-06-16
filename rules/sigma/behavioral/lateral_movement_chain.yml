@@ -1,0 +1,79 @@
+title: Lateral Movement Attack Chain Multi-Stage Sequence
+id: thor-behavioral-seq-003
+status: stable
+description: |
+  Detects lateral movement sequences across multiple events:
+  1. Network discovery (host and port scanning)
+  2. Successful credential reuse (SSH/SMB/WinRM after failures)
+  3. Remote command execution on target host
+  4. Persistence establishment on newly compromised host
+  Temporal window: 10 minutes per stage transition.
+references:
+  - https://attack.mitre.org/techniques/T1021/
+  - https://attack.mitre.org/techniques/T1078/
+  - https://attack.mitre.org/techniques/T1018/
+author: Thor Security Team
+date: 2026/01/01
+tags:
+  - attack.lateral_movement
+  - attack.t1021
+  - attack.t1078
+  - attack.t1018
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  step1_discovery:
+    CommandLine|contains:
+      - 'nmap '
+      - 'masscan '
+      - 'arp-scan '
+      - 'netdiscover '
+      - 'ping -c '
+    DestinationPort:
+      - 22
+      - 445
+      - 3389
+      - 5985
+  step2_auth_success_after_failures:
+    EventType: 'AUTHENTICATION'
+    Protocol:
+      - ssh
+      - smb
+      - winrm
+      - rdp
+    AuthResult: success
+    PreviousFailures|gte: 3
+  step3_remote_execution:
+    CommandLine|contains:
+      - 'ssh -t '
+      - 'Invoke-Command'
+      - 'psexec'
+      - 'wmiexec'
+      - 'smbexec'
+      - 'atexec'
+  step4_persistence:
+    CommandLine|contains:
+      - 'crontab -e'
+      - 'systemctl enable'
+      - 'schtasks /create'
+      - 'useradd '
+      - 'adduser '
+  timewindow: 600s
+  sequence:
+    - step1_discovery
+    - step2_auth_success_after_failures
+    - step3_remote_execution
+    - step4_persistence
+  condition: sequence
+fields:
+  - CommandLine
+  - SourceIp
+  - DestinationIp
+  - User
+  - HostName
+falsepositives:
+  - Legitimate system administration via SSH automation
+  - Ansible/Puppet/Chef configuration management runs
+  - Authorized IT team remote access procedures
+level: critical

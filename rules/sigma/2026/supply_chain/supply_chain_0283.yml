@@ -1,0 +1,50 @@
+title: Container Escape via Host Proc Filesystem [v36]
+id: thor-2026-supply-chain-0283
+status: experimental
+description: >
+  Detects container escape via host process namespace access. Variant 36 of this detection covering
+  slight behavioral differences in modern supply chain threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1611/
+  - https://thor-security.io/rules/2026/supply_chain
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - '/proc/1/root'
+      - '/proc/1/fd'
+      - '/host/proc'
+      - '/host/sys/kernel'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: critical

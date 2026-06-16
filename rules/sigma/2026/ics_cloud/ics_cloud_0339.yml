@@ -1,0 +1,48 @@
+title: GCP Metadata Server Token Theft [v43]
+id: thor-2026-ics-cloud-0339
+status: experimental
+description: >
+  Detects access to GCP instance metadata server to steal service account tokens. Variant 43 of this detection covering
+  slight behavioral differences in modern ics cloud threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1552/
+  - https://thor-security.io/rules/2026/ics_cloud
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.credential_access
+  - attack.t1552
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'metadata.google.internal/computeMetadata/v1/instance/service-accounts'
+      - '169.254.169.254/computeMetadata'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: critical

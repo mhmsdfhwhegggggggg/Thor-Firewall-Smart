@@ -1,0 +1,63 @@
+title: Process Hollowing Multi-Stage Sequence Detection
+id: thor-behavioral-seq-001
+status: stable
+description: |
+  Detects Process Hollowing attack chain across multiple events:
+  1. Legitimate process spawned in suspended state
+  2. Original image unmapped from memory (NtUnmapViewOfSection)
+  3. Malicious image written to process memory (NtWriteVirtualMemory)
+  4. Thread context hijacked and resumed (SetThreadContext + ResumeThread)
+  This rule requires the Thor Sequence Detection Engine (temporal correlation).
+references:
+  - https://attack.mitre.org/techniques/T1055/012/
+  - https://www.ired.team/offensive-security/code-injection-process-injection/process-hollowing
+author: Thor Security Team
+date: 2026/01/01
+tags:
+  - attack.defense_evasion
+  - attack.privilege_escalation
+  - attack.t1055.012
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  step1_spawn_suspended:
+    CommandLine|contains:
+      - 'CREATE_SUSPENDED'
+      - '--suspended'
+    Image|endswith:
+      - 'svchost.exe'
+      - 'explorer.exe'
+      - 'notepad.exe'
+      - 'dllhost.exe'
+  step2_memory_unmap:
+    EventType: 'UNMAP_VIEW'
+    TargetProcess|startswith:
+      - 'C:\Windows\System32\'
+      - 'C:\Windows\SysWOW64\'
+  step3_memory_write:
+    EventType: 'WRITE_PROCESS_MEMORY'
+    BytesWritten|gte: 4096
+  step4_resume:
+    CallTrace|contains:
+      - 'SetThreadContext'
+      - 'ResumeThread'
+      - 'NtResumeThread'
+  timewindow: 30s
+  sequence:
+    - step1_spawn_suspended
+    - step2_memory_unmap
+    - step3_memory_write
+    - step4_resume
+  condition: sequence
+fields:
+  - Image
+  - CommandLine
+  - ParentImage
+  - TargetProcess
+  - CallTrace
+falsepositives:
+  - Debuggers and IDE tools (Visual Studio, GDB, LLDB)
+  - Security testing frameworks during authorized red team ops
+  - JIT compilers and runtime environments
+level: critical

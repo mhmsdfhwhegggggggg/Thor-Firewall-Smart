@@ -1,0 +1,18 @@
+[package]
+name = "thor-ids"
+version = "0.2.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Thor Security Team"]
+description = "Thor IDS: Neural DPI, anomaly detection, and covert channel detection"
+
+[dependencies]
+dashmap    = { version = "6.0" }
+serde      = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing    = "0.1"
+anyhow     = "1.0"
+tokio      = { version = "1.37", features = ["full"] }
+
+[dev-dependencies]
+tempfile = "3"

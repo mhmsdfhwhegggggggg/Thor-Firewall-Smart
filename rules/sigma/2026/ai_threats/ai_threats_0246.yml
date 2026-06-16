@@ -1,0 +1,50 @@
+title: Shadow Model Training on Stolen Data [v31]
+id: thor-2026-ai-threats-0246
+status: experimental
+description: >
+  Detects unauthorized GPU-intensive training jobs. Variant 31 of this detection covering
+  slight behavioral differences in modern ai threats threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1496/
+  - https://thor-security.io/rules/2026/ai_threats
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.impact
+  - attack.t1496
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'torchrun'
+      - 'deepspeed'
+      - 'accelerate'
+      - 'train.py --data'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: high

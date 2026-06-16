@@ -1,0 +1,50 @@
+title: Cloud Backup Deletion Before Ransomware [v23]
+id: thor-2026-ransomware-0178
+status: experimental
+description: >
+  Detects cloud backup deletion prior to encryption activity. Variant 23 of this detection covering
+  slight behavioral differences in modern ransomware threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1490/
+  - https://thor-security.io/rules/2026/ransomware
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.impact
+  - attack.t1490
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'aws s3 rm'
+      - 'az backup delete'
+      - 'gcloud storage rm'
+      - 'boto3.delete'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: critical

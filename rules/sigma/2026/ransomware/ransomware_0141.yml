@@ -1,0 +1,49 @@
+title: Inhibit System Recovery via Boot Configuration [v18]
+id: thor-2026-ransomware-0141
+status: experimental
+description: >
+  Detects commands that disable system recovery mechanisms. Variant 18 of this detection covering
+  slight behavioral differences in modern ransomware threat actors.
+references:
+  - https://attack.mitre.org/techniques/T1490/
+  - https://thor-security.io/rules/2026/ransomware
+author: Thor Security Team
+date: 2026/01/01
+modified: 2026/06/16
+tags:
+  - attack.impact
+  - attack.t1490
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'bcdedit /set {default} recoveryenabled No'
+      - 'reagentc /disable'
+      - 'rstrui /quiet'
+  filter_admin_tools:
+    ParentImage|contains:
+      - '/usr/bin/apt'
+      - '/usr/bin/snap'
+      - '/usr/local/bin/ansible'
+      - '/usr/bin/chef-client'
+  filter_known_paths:
+    CurrentDirectory|startswith:
+      - '/opt/security-tools/'
+      - '/home/pentest/'
+  condition: selection and not 1 of filter_*
+fields:
+  - CommandLine
+  - ParentCommandLine
+  - User
+  - ProcessId
+  - ProcessName
+  - HostName
+  - CurrentDirectory
+falsepositives:
+  - Legitimate administrative operations matching these patterns
+  - Authorized security testing and red team operations
+  - Approved CI/CD pipeline automated tasks
+  - Security research environments
+level: high
