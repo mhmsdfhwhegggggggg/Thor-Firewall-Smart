@@ -30,8 +30,11 @@ struct ssl_args {
     __u64 len;
 };
 
+/* Intermediate storage for in-flight SSL_{read,write} args keyed by pid_tgid.
+ * LRU_HASH: SSL entries from killed/hung processes are auto-evicted,
+ * preventing unbounded growth when SSL probes miss their uretprobe exit. */
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 8192);
     __type(key, __u64); // pid_tgid
     __type(value, struct ssl_args);
