@@ -48,9 +48,10 @@ struct {
     __uint(max_entries, 4 * 1024 * 1024); // 4 MB
 } thor_fim_events SEC(".maps");
 
-/* Path prefix filter — only monitor specified path prefixes */
+/* Path prefix filter — only monitor specified path prefixes.
+ * LRU_HASH: bounded memory; stale/removed prefixes evicted automatically. */
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 512);
     __type(key,   char[64]);
     __type(value, __u8);
@@ -64,9 +65,10 @@ struct {
     __type(value, struct fim_event);
 } thor_fim_scratch SEC(".maps");
 
-/* UID allowlist — never generate events for UIDs in this set */
+/* UID allowlist — never generate events for UIDs in this set.
+ * LRU_HASH: no manual eviction needed; oldest UID entries replaced under load. */
 struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 64);
     __type(key,   __u32);
     __type(value, __u8);
