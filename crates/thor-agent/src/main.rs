@@ -17,6 +17,12 @@
 //!   ▸ JA4+        — TLS client (JA4) + server (JA4S) + SSH (JA4SSH) fingerprinting
 //!   ▸ TcpReassembler — Sequence-number-aware TCP stream reassembly
 //!   ▸ FingerprintEngine — Known-malicious JA4 database + auto Sigma rule injection
+//!
+//! Axis 3 (complete):
+//!   ▸ ThorQL      — SQL-like endpoint query language (SELECT/FROM/WHERE/LIKE/>/<)
+//!   ▸ Artifacts   — 15+ MITRE ATT&CK-mapped forensic investigation templates
+//!   ▸ Collector   — In-memory evidence packaging with SHA-256 chain of custody
+//!   ▸ MemScanner  — YARA scanning of live process memory (fileless malware)
 
 use anyhow::{Context, Result};
 use mimalloc::MiMalloc;
@@ -44,6 +50,8 @@ mod security;
 // Axis 2: new modules
 mod dissectors;
 mod fingerprint;
+// Axis 3: DFIR
+mod forensics;
 
 use config::ThorConfig;
 use ebpf::BpfManager;
