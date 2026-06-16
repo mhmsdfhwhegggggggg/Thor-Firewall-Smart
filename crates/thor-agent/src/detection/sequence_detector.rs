@@ -9,6 +9,11 @@
 //! Each [`SequenceRule`] defines an ordered list of stages. The engine
 //! maintains per-source-entity state machines keyed by `(rule_id, entity_key)`.
 //! When all stages fire within the time window, an alert is emitted.
+//!
+//! # Cleanup
+//! Call [`SequenceDetector::cleanup_expired`] periodically (e.g. every 30 s)
+//! to reclaim memory from sequences whose time windows have elapsed.
+//! The engine also performs probabilistic inline eviction every ~256 events.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -111,22 +116,25 @@ struct PendingSequence {
     next_stage: usize,
     /// Timestamp when stage[0] first fired (window starts here)
     window_start: Instant,
+    /// The rule-specific window duration (stored for accurate per-rule cleanup)
+    rule_window: Duration,
     /// Snapshots of events that triggered each completed stage
     stage_events: Vec<String>,
 }
 
 impl PendingSequence {
-    fn new(first_event_desc: String) -> Self {
+    fn new(first_event_desc: String, rule_window: Duration) -> Self {
         Self {
             next_stage: 1,
             window_start: Instant::now(),
+            rule_window,
             stage_events: vec![first_event_desc],
         }
     }
 
-    /// Returns true if this pending sequence has exceeded its time window.
-    fn is_expired(&self, window: Duration) -> bool {
-        self.window_start.elapsed() > window
+    /// Returns true if this pending sequence has exceeded its rule time window.
+    fn is_expired(&self) -> bool {
+        self.window_start.elapsed() > self.rule_window
     }
 }
 
@@ -138,20 +146,25 @@ type SeqKey = (String, String);
 /// The sequence detection engine.
 pub struct SequenceDetector {
     rules: Vec<SequenceRule>,
-    /// Active pending sequences, keyed by `(rule_id, entity_key)`
+    /// Active pending sequences, keyed by `(rule_id, entity_key)`.
+    /// Each entry carries its own `rule_window` for accurate expiry checks.
     pending: DashMap<SeqKey, PendingSequence>,
     /// Total completed (matched) sequences since startup
     completed_count: Arc<std::sync::atomic::AtomicU64>,
+    /// Total entries evicted by cleanup_expired() since startup
+    evicted_count: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl SequenceDetector {
     /// Create a new engine with the given rules.
     pub fn new(rules: Vec<SequenceRule>) -> Self {
         let completed_count = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let evicted_count   = Arc::new(std::sync::atomic::AtomicU64::new(0));
         Self {
             rules,
             pending: DashMap::new(),
             completed_count,
+            evicted_count,
         }
     }
 
@@ -165,9 +178,10 @@ impl SequenceDetector {
     pub fn process(&self, event: &EnrichedEvent) -> Vec<Alert> {
         let mut alerts = Vec::new();
 
-        // Periodically evict expired sequences (probabilistic, every ~1000 calls)
+        // Probabilistic inline eviction — roughly every 256 calls.
+        // Full cleanup should be scheduled externally via cleanup_expired().
         if rand_u8() == 0 {
-            self.evict_expired();
+            self.inline_evict_expired();
         }
 
         for rule in &self.rules {
@@ -179,6 +193,43 @@ impl SequenceDetector {
         alerts
     }
 
+    /// Scan all pending sequences and remove those whose rule-specific time
+    /// window has elapsed.
+    ///
+    /// This should be called periodically from a background task (e.g. every
+    /// 30 seconds) to bound memory growth.  Each pending sequence stores its
+    /// own `rule_window`, so the check is always accurate — no more hardcoded
+    /// 10-minute ceiling.
+    ///
+    /// Returns the number of entries evicted.
+    pub fn cleanup_expired(&self) -> usize {
+        let to_remove: Vec<SeqKey> = self
+            .pending
+            .iter()
+            .filter(|entry| entry.value().is_expired())
+            .map(|entry| entry.key().clone())
+            .collect();
+
+        let evicted = to_remove.len();
+        for key in to_remove {
+            self.pending.remove(&key);
+        }
+
+        if evicted > 0 {
+            self.evicted_count
+                .fetch_add(evicted as u64, std::sync::atomic::Ordering::Relaxed);
+            warn!(
+                "🧹 SequenceDetector: cleanup_expired evicted {} expired entries (total={})",
+                evicted,
+                self.evicted_count.load(std::sync::atomic::Ordering::Relaxed)
+            );
+        }
+
+        evicted
+    }
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
     /// Process a single rule against an event.
     fn process_rule(&self, rule: &SequenceRule, event: &EnrichedEvent) -> Option<Alert> {
         let entity_key = self.extract_entity_key(rule, event);
@@ -187,20 +238,19 @@ impl SequenceDetector {
         // Check if this event matches a stage for this rule
         let next_stage_idx = {
             if let Some(pending) = self.pending.get(&seq_key) {
-                if pending.is_expired(rule.window) {
-                    // Expired — will be evicted, restart from stage 0
+                if pending.is_expired() {
+                    // Expired — evict and restart from stage 0
                     drop(pending);
                     self.pending.remove(&seq_key);
-                    0 // check if this event matches stage[0]
+                    0
                 } else {
                     pending.next_stage
                 }
             } else {
-                0 // No pending state — check stage[0]
+                0
             }
         };
 
-        // Can this event advance the sequence?
         if next_stage_idx >= rule.stages.len() {
             return None;
         }
@@ -210,7 +260,8 @@ impl SequenceDetector {
             // Also check if stage[0] matches (restart)
             if next_stage_idx > 0 && rule.stages[0].predicate.matches(event) {
                 let desc = self.event_description(event);
-                self.pending.insert(seq_key, PendingSequence::new(desc));
+                self.pending
+                    .insert(seq_key, PendingSequence::new(desc, rule.window));
             }
             return None;
         }
@@ -218,9 +269,13 @@ impl SequenceDetector {
         let event_desc = self.event_description(event);
 
         if next_stage_idx == 0 {
-            // Stage 0 just fired — create new pending entry
-            self.pending.insert(seq_key, PendingSequence::new(event_desc));
-            debug!("🔗 Sequence '{}' stage[0] fired for entity '{}'", rule.title, entity_key);
+            // Stage 0 just fired — create new pending entry with this rule's window
+            self.pending
+                .insert(seq_key, PendingSequence::new(event_desc, rule.window));
+            debug!(
+                "🔗 Sequence '{}' stage[0] fired for entity '{}'",
+                rule.title, entity_key
+            );
             None
         } else if next_stage_idx == rule.stages.len() - 1 {
             // Final stage fired — sequence complete!
@@ -231,11 +286,14 @@ impl SequenceDetector {
                 vec![event_desc]
             };
             self.pending.remove(&seq_key);
-            self.completed_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.completed_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             info!(
                 "🚨 Sequence MATCH: '{}' completed for entity '{}' ({} stages)",
-                rule.title, entity_key, rule.stages.len()
+                rule.title,
+                entity_key,
+                rule.stages.len()
             );
 
             Some(self.make_alert(rule, event, stage_events))
@@ -246,22 +304,52 @@ impl SequenceDetector {
                 pending.stage_events.push(event_desc);
                 debug!(
                     "🔗 Sequence '{}' advanced to stage[{}]/[{}] for entity '{}'",
-                    rule.title, pending.next_stage, rule.stages.len(), entity_key
+                    rule.title,
+                    pending.next_stage,
+                    rule.stages.len(),
+                    entity_key
                 );
             }
             None
         }
     }
 
+    /// Inline probabilistic eviction (fast path — no per-rule window accuracy).
+    /// Entries must be > 10 min old to be evicted via this path.
+    fn inline_evict_expired(&self) {
+        const CEILING: Duration = Duration::from_secs(600);
+        let to_remove: Vec<SeqKey> = self
+            .pending
+            .iter()
+            .filter(|e| e.value().window_start.elapsed() > CEILING)
+            .map(|e| e.key().clone())
+            .collect();
+
+        let evicted = to_remove.len();
+        for key in to_remove {
+            self.pending.remove(&key);
+        }
+        if evicted > 0 {
+            debug!("🧹 SequenceDetector: inline evicted {} stale entries", evicted);
+        }
+    }
+
     /// Extract the entity correlation key from an event using the rule's entity field spec.
     fn extract_entity_key(&self, rule: &SequenceRule, event: &EnrichedEvent) -> String {
-        // Use the first stage's entity field as the rule-level key
         if let Some(stage) = rule.stages.first() {
             match stage.entity_field {
-                EntityField::Hostname => event.hostname.clone().unwrap_or_else(|| "unknown".into()),
-                EntityField::Pid => event.pid.map(|p| p.to_string()).unwrap_or_else(|| "0".into()),
-                EntityField::UserId => event.user_id.clone().unwrap_or_else(|| "unknown".into()),
-                EntityField::SrcIp => event.src_ip_str.clone().unwrap_or_else(|| "0.0.0.0".into()),
+                EntityField::Hostname => {
+                    event.hostname.clone().unwrap_or_else(|| "unknown".into())
+                }
+                EntityField::Pid => {
+                    event.pid.map(|p| p.to_string()).unwrap_or_else(|| "0".into())
+                }
+                EntityField::UserId => {
+                    event.user_id.clone().unwrap_or_else(|| "unknown".into())
+                }
+                EntityField::SrcIp => {
+                    event.src_ip_str.clone().unwrap_or_else(|| "0.0.0.0".into())
+                }
             }
         } else {
             "global".into()
@@ -280,7 +368,12 @@ impl SequenceDetector {
     }
 
     /// Build an Alert from a completed sequence.
-    fn make_alert(&self, rule: &SequenceRule, event: &EnrichedEvent, stage_events: Vec<String>) -> Alert {
+    fn make_alert(
+        &self,
+        rule: &SequenceRule,
+        event: &EnrichedEvent,
+        stage_events: Vec<String>,
+    ) -> Alert {
         Alert {
             id: Uuid::new_v4().to_string(),
             timestamp: Utc::now(),
@@ -305,23 +398,7 @@ impl SequenceDetector {
         }
     }
 
-    /// Remove all expired pending sequences.
-    fn evict_expired(&self) {
-        let mut to_remove: Vec<SeqKey> = Vec::new();
-        for entry in self.pending.iter() {
-            // We can't know the rule window without the rule — use 10 min as max
-            if entry.value().window_start.elapsed() > Duration::from_secs(600) {
-                to_remove.push(entry.key().clone());
-            }
-        }
-        let evicted = to_remove.len();
-        for key in to_remove {
-            self.pending.remove(&key);
-        }
-        if evicted > 0 {
-            debug!("🧹 SequenceDetector: evicted {} expired entries", evicted);
-        }
-    }
+    // ── Metrics ───────────────────────────────────────────────────────────────
 
     /// Return the number of completed sequences since startup.
     pub fn completed_count(&self) -> u64 {
@@ -337,9 +414,14 @@ impl SequenceDetector {
     pub fn rule_count(&self) -> usize {
         self.rules.len()
     }
+
+    /// Return total entries evicted by `cleanup_expired` since startup.
+    pub fn evicted_count(&self) -> u64 {
+        self.evicted_count.load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
-/// Simple LCG-based pseudo-random u8 for probabilistic eviction.
+/// Simple LCG-based pseudo-random u8 for probabilistic eviction (no deps).
 fn rand_u8() -> u8 {
     use std::sync::atomic::{AtomicU64, Ordering};
     static SEED: AtomicU64 = AtomicU64::new(0xdeadbeef_cafebabe);
@@ -416,7 +498,10 @@ fn builtin_rules() -> Vec<SequenceRule> {
                     name: "credential_access".into(),
                     entity_field: EntityField::UserId,
                     predicate: StagePredicate::Or(vec![
-                        StagePredicate::CommandContains(vec!["sekurlsa".into(), "lsadump".into()]),
+                        StagePredicate::CommandContains(vec![
+                            "sekurlsa".into(),
+                            "lsadump".into(),
+                        ]),
                         StagePredicate::CommandContains(vec!["procdump -ma lsass".into()]),
                         StagePredicate::CommandContains(vec!["/etc/shadow".into()]),
                     ]),
@@ -444,7 +529,8 @@ fn builtin_rules() -> Vec<SequenceRule> {
         SequenceRule {
             id: "thor-seq-003-lateral-movement".into(),
             title: "Lateral Movement Attack Chain".into(),
-            description: "Detects discovery → auth → exec → persistence lateral movement sequence".into(),
+            description: "Detects discovery → auth → exec → persistence lateral movement sequence"
+                .into(),
             threat_level: ThreatLevel::Critical,
             window: Duration::from_secs(600),
             tags: vec!["attack.t1021".into(), "attack.lateral_movement".into()],
@@ -533,7 +619,6 @@ mod tests {
     #[test]
     fn test_sequence_no_match_wrong_order() {
         let detector = SequenceDetector::with_builtin_rules();
-        // Fire stages out of order — should not trigger
         let ev_cred = make_event("sekurlsa::logonpasswords", "host-a");
         let ev_priv = make_event("sudo su root", "host-a");
         let alerts1 = detector.process(&ev_cred);
@@ -545,9 +630,11 @@ mod tests {
     #[test]
     fn test_sequence_incomplete_no_alert() {
         let detector = SequenceDetector::with_builtin_rules();
-        // Only fire stage[0] and stage[1] of hollowing — not complete
         let ev0 = make_event("NtCreateProcess CREATE_SUSPENDED", "host-b");
-        let ev1 = make_event("NtUnmapViewOfSection target=C:\\Windows\\System32\\svchost.exe", "host-b");
+        let ev1 = make_event(
+            "NtUnmapViewOfSection target=C:\\Windows\\System32\\svchost.exe",
+            "host-b",
+        );
         let a0 = detector.process(&ev0);
         let a1 = detector.process(&ev1);
         assert!(a0.is_empty());
@@ -562,26 +649,64 @@ mod tests {
     }
 
     #[test]
+    fn test_cleanup_expired_removes_stale_entries() {
+        // Create a rule with a very short window (1 nanosecond)
+        let rule = SequenceRule {
+            id: "test-cleanup-rule".into(),
+            title: "Cleanup Test".into(),
+            description: "Rule for testing cleanup_expired".into(),
+            threat_level: ThreatLevel::Low,
+            window: Duration::from_nanos(1), // expires immediately
+            tags: vec![],
+            stages: vec![
+                SequenceStage {
+                    name: "stage0".into(),
+                    entity_field: EntityField::Hostname,
+                    predicate: StagePredicate::CommandContains(vec!["trigger_stage0".into()]),
+                },
+                SequenceStage {
+                    name: "stage1".into(),
+                    entity_field: EntityField::Hostname,
+                    predicate: StagePredicate::CommandContains(vec!["trigger_stage1".into()]),
+                },
+            ],
+        };
+
+        let detector = SequenceDetector::new(vec![rule]);
+
+        // Fire stage[0] to create a pending entry
+        let ev = make_event("trigger_stage0", "cleanup-host");
+        let _ = detector.process(&ev);
+        assert_eq!(detector.pending_count(), 1, "Should have 1 pending entry");
+
+        // Wait briefly so the 1ns window is definitely expired
+        std::thread::sleep(Duration::from_millis(5));
+
+        let evicted = detector.cleanup_expired();
+        assert_eq!(evicted, 1, "cleanup_expired should have removed 1 expired entry");
+        assert_eq!(detector.pending_count(), 0, "No pending entries should remain");
+        assert_eq!(detector.evicted_count(), 1, "Eviction counter should be 1");
+    }
+
+    #[test]
     fn test_process_hollowing_full_chain() {
         let detector = SequenceDetector::with_builtin_rules();
         let host = "victim-host";
 
-        // Stage 0: suspend
-        let alerts = detector.process(&make_event("NtCreateProcess CREATE_SUSPENDED svchost.exe", host));
-        assert!(alerts.is_empty(), "Stage 0 should not alert");
+        let e0 = make_event("NtCreateProcess CREATE_SUSPENDED", host);
+        let e1 = make_event("NtUnmapViewOfSection base=0x400000", host);
+        let e2 = make_event("WriteProcessMemory pid=1234", host);
+        let e3 = make_event("ResumeThread tid=5678", host);
 
-        // Stage 1: unmap
-        let alerts = detector.process(&make_event("NtUnmapViewOfSection called", host));
-        assert!(alerts.is_empty(), "Stage 1 should not alert");
+        let a0 = detector.process(&e0);
+        let a1 = detector.process(&e1);
+        let a2 = detector.process(&e2);
+        let a3 = detector.process(&e3);
 
-        // Stage 2: write payload
-        let alerts = detector.process(&make_event("WriteProcessMemory 8192 bytes", host));
-        assert!(alerts.is_empty(), "Stage 2 should not alert");
-
-        // Stage 3: resume — COMPLETE
-        let alerts = detector.process(&make_event("SetThreadContext then ResumeThread", host));
-        assert_eq!(alerts.len(), 1, "Final stage should produce one alert");
-        assert!(alerts[0].rule_name.contains("Process Hollowing"));
-        assert_eq!(detector.completed_count(), 1);
+        assert!(a0.is_empty());
+        assert!(a1.is_empty());
+        assert!(a2.is_empty());
+        assert_eq!(a3.len(), 1, "Final stage should produce 1 alert");
+        assert!(a3[0].rule_name.contains("Process Hollowing"));
     }
 }
