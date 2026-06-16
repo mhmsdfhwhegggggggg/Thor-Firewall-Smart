@@ -4,6 +4,7 @@ members = [
     "crates/thor-common",
     "crates/thor-bpf",
     "crates/thor-agent",
+    "crates/thor-script",
 ]
 
 [workspace.package]

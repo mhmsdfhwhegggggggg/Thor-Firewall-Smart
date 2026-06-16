@@ -13,6 +13,7 @@
 pub mod ja4;
 pub mod ja4s;
 pub mod ja4ssh;
+pub mod ja4h;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ use chrono::{DateTime, Utc};
 pub use ja4::{Ja4Fingerprint, ClientHello, known_malicious_ja4};
 pub use ja4s::{Ja4sFingerprint, ServerHello};
 pub use ja4ssh::{Ja4SshFingerprint, SshKexInit};
+pub use ja4h::{Ja4HFingerprint, Http2Settings, Http2HeadersMeta, known_malicious_ja4h};
 
 // ─── Fingerprint Hit ──────────────────────────────────────────────────────────
 
@@ -43,6 +45,7 @@ pub enum FingerprintKind {
     Ja4Client,
     Ja4Server,
     Ja4Ssh,
+    Ja4Http,
 }
 
 // ─── Fingerprint Engine ───────────────────────────────────────────────────────
@@ -50,6 +53,8 @@ pub enum FingerprintKind {
 pub struct FingerprintEngine {
     /// Known-malicious JA4 hashes
     malicious_ja4: HashSet<String>,
+    /// Known-malicious JA4H (HTTP/2) hashes
+    malicious_ja4h: HashSet<String>,
     /// Recent fingerprint hits (fingerprint → count for rate analysis)
     hit_counts: Arc<DashMap<String, u64>>,
 }
@@ -57,9 +62,44 @@ pub struct FingerprintEngine {
 impl FingerprintEngine {
     pub fn new() -> Self {
         Self {
-            malicious_ja4: known_malicious_ja4(),
+            malicious_ja4:  known_malicious_ja4(),
+            malicious_ja4h: known_malicious_ja4h(),
             hit_counts: Arc::new(DashMap::new()),
         }
+    }
+
+    /// Analyse HTTP/2 raw payload and return JA4H fingerprint hit.
+    pub fn analyse_http2(
+        &self,
+        data: &[u8],
+        src_ip: &str,
+        dst_ip: &str,
+        dst_port: u16,
+    ) -> Option<FingerprintHit> {
+        let (settings, headers) = ja4h::extract_ja4h_from_h2(data)?;
+        let fp = Ja4HFingerprint::from_http2(&settings, &headers);
+
+        *self.hit_counts.entry(fp.fingerprint.clone()).or_insert(0) += 1;
+
+        let is_malicious = self.malicious_ja4h.contains(&fp.fingerprint);
+        if is_malicious {
+            warn!(fp = %fp.fingerprint, src = %src_ip, "🚨 Malicious JA4H fingerprint");
+        }
+
+        Some(FingerprintHit {
+            fingerprint: fp.fingerprint,
+            kind: FingerprintKind::Ja4Http,
+            src_ip: src_ip.to_string(),
+            dst_ip: dst_ip.to_string(),
+            dst_port,
+            is_malicious,
+            tool_hint: None,
+            timestamp: Utc::now(),
+        })
+    }
+
+    pub fn add_malicious_ja4h(&mut self, fp: String) {
+        self.malicious_ja4h.insert(fp);
     }
 
     /// Analyse raw TLS bytes and return a fingerprint hit if malicious.

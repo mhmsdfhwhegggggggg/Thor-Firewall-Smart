@@ -19,6 +19,9 @@
 pub mod matcher;
 pub mod rule_parser;
 pub mod threshold;
+pub mod flow;
+pub mod file_extractor;
+pub mod file_reassembler;
 
 use std::collections::HashMap;
 use std::path::Path;

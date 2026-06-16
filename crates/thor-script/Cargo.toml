@@ -1,0 +1,27 @@
+[package]
+name = "thor-script"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "ThorScript — lightweight sandboxed scripting for custom detection rules"
+
+[lib]
+name = "thor_script"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow     = { workspace = true }
+thiserror  = { workspace = true }
+tracing    = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+regex      = { workspace = true }
+once_cell  = { workspace = true }
+dashmap    = { workspace = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name    = "script_engine"
+harness = false
