@@ -68,16 +68,14 @@ bytes             = "1.5"
 num_cpus          = "1.16"
 
 # ── NEW: Phase 1 additions ────────────────────────────────────────────────────
-# Fast file hashing (10× faster than SHA256)
 blake3            = "1.5"
-# Hostname resolution for alert enrichment
 hostname          = "0.4"
-# Structured logging to files
 tracing-appender  = "0.2"
-# PCRE-compatible regex for IDS rules
-regex             = "1.10"
-# For mimalloc global allocator
 mimalloc          = { version = "0.1", default-features = false }
+
+# ── NEW: Phase 2 (Axis 2) additions ──────────────────────────────────────────
+# Lazy statics for compiled regex (HTTP dissector)
+once_cell         = "1.19"
 
 [build-dependencies]
 # Nothing extra

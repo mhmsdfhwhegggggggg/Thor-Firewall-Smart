@@ -1,84 +1,146 @@
-//! JA4 Encrypted Traffic Analyzer & Generative Rule Creator
+//! JA4 Encrypted Traffic Analyzer — Production Implementation
+//!
+//! Axis 2: Replaces the mock implementation with the full FingerprintEngine.
+//! Integrates JA4 client fingerprinting, malicious-JA4 database lookup,
+//! and automatic Sigma rule injection for new detections.
+
 use anyhow::Result;
 use std::sync::Arc;
+use std::collections::HashSet;
 use tracing::{info, warn};
 use tokio::sync::RwLock;
 
-use crate::ml::llm_reporter::LlmReporter;
+use crate::fingerprint::{FingerprintEngine, FingerprintHit, FingerprintKind};
+use crate::fingerprint::ja4::{parse_client_hello, Ja4Fingerprint};
 use crate::detection::sigma::SigmaEngine;
 
 pub struct Ja4Analyzer {
-    llm: Arc<LlmReporter>,
+    engine: FingerprintEngine,
     sigma_engine: Arc<RwLock<SigmaEngine>>,
-    known_malicious_ja4: std::collections::HashSet<String>,
 }
 
 impl Ja4Analyzer {
-    pub fn new(llm: Arc<LlmReporter>, sigma_engine: Arc<RwLock<SigmaEngine>>) -> Self {
+    pub fn new(sigma_engine: Arc<RwLock<SigmaEngine>>) -> Self {
         Self {
-            llm,
+            engine: FingerprintEngine::new(),
             sigma_engine,
-            known_malicious_ja4: std::collections::HashSet::new(),
         }
     }
 
-    /// Analyze TLS payload and extract JA4 fingerprint (Simplified for presentation)
-    pub async fn analyze_tls_payload(&self, pid: u32, comm: &str, payload: &[u8], dst_ip: &str) -> Result<()> {
-        // 1. Calculate JA4 fingerprint (In production, use ja4-rs crate here)
-        // Example: t13d1516h2_8daaf6152771_02713d6af862
-        let ja4_hash = self.calculate_ja4_mock(payload); 
-        
-        info!("🔍 Detected TLS Client Hello from {} (PID: {}) -> JA4: {}", comm, pid, ja4_hash);
+    /// Analyse a raw TLS ClientHello payload and return a hit if malicious.
+    pub async fn analyze_tls_payload(
+        &self,
+        pid: u32,
+        comm: &str,
+        payload: &[u8],
+        src_ip: &str,
+        dst_ip: &str,
+        dst_port: u16,
+    ) -> Result<Option<FingerprintHit>> {
+        let hit = self.engine.analyse_tls_client(payload, src_ip, dst_ip, dst_port);
 
-        // 2. Check against malicious database
-        if self.known_malicious_ja4.contains(&ja4_hash) {
-            warn!("🚨 MALICIOUS JA4 DETECTED: {}", ja4_hash);
-            
-            // 3. Generative Rule Creation (LLM writes and injects Sigma rules on the fly)
-            self.generate_and_inject_rule(comm, dst_ip, &ja4_hash).await?;
-            
-            // 4. Autonomous Response Activation (Isolation)
-            // e.g., self.soar_engine.isolate_process(pid).await?;
+        if let Some(ref h) = hit {
+            info!(
+                comm = comm,
+                pid = pid,
+                fp = %h.fingerprint,
+                malicious = h.is_malicious,
+                "TLS JA4 fingerprint"
+            );
+
+            if h.is_malicious {
+                warn!(
+                    comm = comm,
+                    pid = pid,
+                    fp = %h.fingerprint,
+                    "🚨 MALICIOUS JA4 fingerprint detected — auto-generating Sigma rule"
+                );
+                // Inject a detection rule into the live Sigma engine
+                self.inject_ja4_rule(comm, dst_ip, &h.fingerprint).await;
+            }
         }
 
-        Ok(())
+        Ok(hit)
     }
 
-    async fn generate_and_inject_rule(&self, process: &str, ip: &str, ja4: &str) -> Result<()> {
-        info!("🤖 Instructing Local LLM to generate Sigma rule for JA4: {}", ja4);
-        
-        let prompt = format!(
-            "A malicious process '{}' connected to '{}' using a known malicious TLS fingerprint (JA4: {}). \
-            Write a concise, valid Sigma rule in YAML format to detect this specific behavior. \
-            Output ONLY the YAML, no markdown, no explanations.",
-            process, ip, ja4
-        );
-
-        // Call Local LLM
-        // For compilation purposes, assuming llm_reporter has a method to interact as requested:
-        // Assume `generate_report` can be creatively repurposed or we use a conceptual `generate_raw_yaml` method.
-        // Wait, LlmReporter currently has `generate_report` which takes process, destination, detection.
-        // We will mock calling LLM for valid code compilation.
-        
-        // Mocked LLM Call for compilation safety
-        let yaml_rule = format!(
-            "title: Detect Malicious JA4 from {}\nlogsource:\n  category: network\ndetection:\n  selection:\n    ja4: {}\n  condition: selection", 
-            process, ja4
-        );
-        
-        info!("✅ LLM Generated Rule:\n{}", yaml_rule);
-
-        // 5. Dynamic Hot Reload Injection into Sigma Engine
-        // Assume SigmaEngine has this capability conceptually:
-        // let mut engine = self.sigma_engine.write().await;
-        // engine.inject_rule_from_string(&yaml_rule)?;
-        info!("✅ Rule dynamically injected into live detection engine!");
-
-        Ok(())
+    /// Add a custom malicious JA4 fingerprint at runtime.
+    pub fn add_malicious_fingerprint(&mut self, fp: String) {
+        self.engine.add_malicious_ja4(fp);
     }
 
-    fn calculate_ja4_mock(&self, _payload: &[u8]) -> String {
-        // In production: ja4_rs::calculate(payload)
-        "t13d1516h2_8daaf6152771_badbeef".to_string()
+    /// Returns top-N fingerprints seen (for dashboard analytics).
+    pub fn top_fingerprints(&self, n: usize) -> Vec<(String, u64)> {
+        self.engine.top_fingerprints(n)
+    }
+
+    pub fn malicious_db_size(&self) -> usize {
+        self.engine.malicious_db_size()
+    }
+
+    // ── Private ──────────────────────────────────────────────────────────────
+
+    async fn inject_ja4_rule(&self, process: &str, dst_ip: &str, ja4: &str) {
+        // Generate a Sigma-compatible YAML rule for this JA4 fingerprint
+        let yaml = format!(
+            r#"title: Malicious JA4 TLS Fingerprint from {process}
+id: auto-{ja4}
+status: experimental
+description: >
+  Automatically generated by ThorIDS after detecting a known-malicious
+  JA4 fingerprint from process '{process}' to {dst_ip}.
+  JA4: {ja4}
+logsource:
+  category: network
+  product: thor
+detection:
+  selection:
+    dst_ip: "{dst_ip}"
+    ja4_hash: "{ja4}"
+  condition: selection
+level: high
+tags:
+  - attack.command_and_control
+  - auto-generated
+"#,
+            process = process,
+            dst_ip = dst_ip,
+            ja4 = ja4,
+        );
+
+        let mut engine = self.sigma_engine.write().await;
+        match engine.inject_rule_from_string(&yaml) {
+            Ok(_) => info!("✅ Sigma rule injected for JA4: {}", ja4),
+            Err(e) => warn!("Failed to inject JA4 Sigma rule: {}", e),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fingerprint_engine_has_known_bad() {
+        let engine = FingerprintEngine::new();
+        assert!(engine.malicious_db_size() > 0);
+    }
+
+    #[test]
+    fn ja4_parsed_from_hello() {
+        // Build a minimal synthetic ClientHello and verify we get a fingerprint
+        use crate::fingerprint::ja4::ClientHello;
+        let hello = ClientHello {
+            tls_version: 0x0303,
+            supported_versions: vec![0x0304],
+            cipher_suites: vec![0xc02b, 0xc02c],
+            extensions: vec![0x0000, 0x000a, 0x000d],
+            sni: Some("example.com".to_string()),
+            alpn: vec!["h2".to_string()],
+            signature_algorithms: vec![0x0403],
+            supported_groups: vec![0x001d],
+        };
+        let fp = Ja4Fingerprint::from_parsed(&hello);
+        assert!(!fp.fingerprint.is_empty());
+        assert_eq!(fp.sni_flag, 'd');
     }
 }
