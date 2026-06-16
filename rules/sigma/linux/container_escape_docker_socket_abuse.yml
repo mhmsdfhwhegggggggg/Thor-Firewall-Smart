@@ -1,0 +1,24 @@
+title: Container Escape - Docker Socket Abuse
+id: 82614243-4f8d-437e-a2d1-dd11ce957eeb
+status: stable
+description: Detects Docker Socket Abuse container escape technique
+author: Thor Security Team
+date: 2024/06/15
+modified: 2025/03/01
+tags:
+    - attack.privilege_escalation
+    - attack.lateral_movement
+    - attack.t1552.007
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '/var/run/docker.sock'
+            - 'docker -H unix'
+    condition: selection
+falsepositives:
+    - Container administrators with legitimate privileged access
+    - Security testing environments
+level: critical

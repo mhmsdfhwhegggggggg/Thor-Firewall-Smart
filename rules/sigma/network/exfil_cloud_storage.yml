@@ -1,0 +1,22 @@
+title: Network Exfiltration - Cloud Storage Exfiltration
+id: 99717509-75d4-4286-b09d-aac08471660b
+status: stable
+description: Detects Cloud Storage Exfiltration data exfiltration over network
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/05/15
+tags:
+    - attack.exfiltration
+    - attack.t1537
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        BytesSent|gt: 10000000
+    condition: selection
+falsepositives:
+    - Legitimate large file transfers
+    - Backup operations
+level: medium

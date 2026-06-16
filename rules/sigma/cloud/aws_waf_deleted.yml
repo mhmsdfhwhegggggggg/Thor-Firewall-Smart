@@ -1,0 +1,22 @@
+title: AWS Security - AWS WAF WebACL Deleted
+id: 3aaa4d97-04e6-4f36-aecd-686f0cacfeea
+status: stable
+description: Detects AWS WAF WebACL Deleted in AWS CloudTrail logs
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.defense_evasion
+    - cloud
+    - attack.t1562
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: 'aws.amazonaws.com'
+    condition: selection
+falsepositives:
+    - Authorized cloud administrators
+    - Automated infrastructure management
+level: high

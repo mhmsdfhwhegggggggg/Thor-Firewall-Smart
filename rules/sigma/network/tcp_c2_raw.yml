@@ -1,0 +1,28 @@
+title: Network C2 - Raw TCP C2 Socket
+id: c4cb5c24-aa56-43b2-953d-538427911eec
+status: stable
+description: Detects Raw TCP C2 Socket network communication
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.command_and_control
+    - attack.t1095
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 53
+            - 443
+            - 80
+            - 8080
+            - 8443
+        CommandLine|contains:
+            - 'nc.*-e.*sh'
+    condition: selection
+falsepositives:
+    - Legitimate network monitoring tools
+level: high

@@ -1,0 +1,20 @@
+title: Network Lateral - DHCPv6 Rogue Server
+id: e808baa3-da17-4726-80b6-6c746893fb1a
+status: stable
+description: Detects DHCPv6 Rogue Server network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1557
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

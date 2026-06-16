@@ -1,0 +1,20 @@
+title: Azure Security - Azure Subscription Hijacking
+id: 86614965-53af-427b-a6aa-4a7503326582
+status: stable
+description: Detects Azure Subscription Hijacking in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1578
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'subscription_hijack'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

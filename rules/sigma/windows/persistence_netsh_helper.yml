@@ -1,0 +1,21 @@
+title: Windows Persistence - Netsh Helper DLL
+id: 4930c97b-39ec-4e0c-849a-328ba0795da4
+status: stable
+description: Detects Netsh Helper DLL persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1546.007
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'netsh add helper'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

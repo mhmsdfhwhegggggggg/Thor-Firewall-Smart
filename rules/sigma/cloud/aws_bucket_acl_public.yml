@@ -1,0 +1,22 @@
+title: AWS Security - S3 Bucket ACL Set to Public
+id: 169576ed-81cb-4df6-b167-de5116f8e7f6
+status: stable
+description: Detects S3 Bucket ACL Set to Public in AWS CloudTrail logs
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.defense_evasion
+    - cloud
+    - attack.t1530
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: 'aws.amazonaws.com'
+    condition: selection
+falsepositives:
+    - Authorized cloud administrators
+    - Automated infrastructure management
+level: high

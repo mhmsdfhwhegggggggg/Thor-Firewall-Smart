@@ -1,0 +1,20 @@
+title: Cleartext Protocol / Amplification - finger_probe
+id: 8aebce61-cf71-4716-8d9c-645488854b3c
+status: stable
+description: Detects insecure or abused protocol usage: finger_probe
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/03/10
+tags:
+    - attack.initial_access
+    - attack.t1190
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Protocol: 'tcp'
+    condition: selection
+falsepositives:
+    - Legacy systems requiring old protocols
+level: low

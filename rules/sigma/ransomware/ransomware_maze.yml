@@ -1,0 +1,31 @@
+title: Maze Ransomware Detection
+id: 9d831f42-7046-4aec-9cbc-5e66d324cdc3
+status: stable
+description: Detects behavioral indicators of Maze ransomware including encryption patterns, ransom note creation, and shadow copy deletion
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+    - attack.t1490
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_shadow:
+        CommandLine|contains:
+            - 'vssadmin delete shadows'
+            - 'wmic shadowcopy delete'
+            - 'bcdedit /set recoveryenabled No'
+            - 'wbadmin delete catalog'
+    selection_extension:
+        TargetFilename|endswith:
+            - '.maze'
+            - '.encrypted'
+            - '.locked'
+    condition: 1 of selection_*
+falsepositives:
+    - Disk cleanup tools
+    - Backup management software
+level: critical

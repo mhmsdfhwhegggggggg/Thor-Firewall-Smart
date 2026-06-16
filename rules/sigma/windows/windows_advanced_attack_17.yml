@@ -1,0 +1,29 @@
+title: Windows Advanced Attack Pattern 17
+id: a11ed7d8-f31c-4304-881a-b1369a0a2253
+status: stable
+description: Detects advanced Windows attack technique 17 - process injection, token manipulation, or kernel exploitation
+author: Thor Security Team
+date: 2025/04/01
+modified: 2025/06/15
+tags:
+    - attack.defense_evasion
+    - attack.privilege_escalation
+    - attack.t1055
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_inject:
+        CommandLine|contains:
+            - 'VirtualAllocEx'
+            - 'WriteProcessMemory'
+            - 'CreateRemoteThread'
+    selection_token:
+        CommandLine|contains:
+            - 'AdjustTokenPrivileges'
+            - 'SeTcbPrivilege'
+            - 'SeDebugPrivilege'
+    condition: 1 of selection_*
+falsepositives:
+    - Security testing tools
+level: high

@@ -1,0 +1,26 @@
+title: LOLBAS Execution - appsync
+id: e63baf66-7843-4dd7-9ed1-be613daa3f57
+status: stable
+description: Detects abuse of appsync binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\appsync.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

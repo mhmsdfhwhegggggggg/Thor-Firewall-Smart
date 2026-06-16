@@ -1,0 +1,20 @@
+title: Network Port Scan - udp_scan
+id: f6c89804-be03-495c-aa70-5a5d5d9213d7
+status: stable
+description: Detects udp_scan network reconnaissance technique
+author: Thor Security Team
+date: 2024/10/15
+modified: 2025/04/01
+tags:
+    - attack.discovery
+    - attack.t1046
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'nmap'
+    condition: selection
+falsepositives:
+    - Authorized network scanning by security team
+level: medium

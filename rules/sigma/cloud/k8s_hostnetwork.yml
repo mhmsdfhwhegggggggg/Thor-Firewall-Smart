@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s Pod with hostNetwork
+id: aa57df5b-c4b8-4db1-9415-0494bef08f2a
+status: stable
+description: Detects K8s Pod with hostNetwork in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1611
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

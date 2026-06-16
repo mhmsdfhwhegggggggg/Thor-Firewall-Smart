@@ -1,0 +1,26 @@
+title: LOLBAS Execution - ieexec
+id: fe5b8bb8-e184-48ec-8c9f-4e376b016bf2
+status: stable
+description: Detects abuse of ieexec binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\ieexec.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

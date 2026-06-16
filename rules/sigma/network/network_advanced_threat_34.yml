@@ -1,0 +1,29 @@
+title: Advanced Network Threat Pattern 34
+id: 13ce1fa3-f30e-497f-9736-3bdddb569b19
+status: stable
+description: Detects advanced network threat pattern 34 based on behavioral analytics and threat intelligence feeds
+author: Thor Security Team
+date: 2025/04/01
+modified: 2025/06/15
+tags:
+    - attack.command_and_control
+    - attack.t1071
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection_beacon:
+        Initiated: 'true'
+        DestinationPort:
+            - 443
+            - 8443
+            - 4433
+    filter_known_good:
+        DestinationHostname|endswith:
+            - '.google.com'
+            - '.microsoft.com'
+            - '.cloudflare.com'
+    condition: selection_beacon and not filter_known_good
+falsepositives:
+    - Legitimate HTTPS connections
+level: low

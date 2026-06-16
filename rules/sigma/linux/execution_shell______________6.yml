@@ -1,0 +1,20 @@
+title: Linux Shell Execution - Pattern ____________
+id: 1c48fac9-d9da-4584-9392-8ee3a518d855
+status: stable
+description: Detects suspicious shell execution pattern matching known malware or reverse shell techniques
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'nc -e /bin/sh'
+    condition: selection
+falsepositives:
+    - Legitimate automation scripts
+level: medium

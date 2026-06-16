@@ -1,0 +1,22 @@
+title: Linux Privilege Escalation - Docker Privilege Escalation
+id: a0c30a3c-2384-4a50-94ba-f2a928943b67
+status: stable
+description: Detects Docker Privilege Escalation privilege escalation technique
+author: Thor Security Team
+date: 2024/09/15
+modified: 2025/04/01
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'docker run -v /:/host'
+            - '--cap-add=SYS_ADMIN'
+    condition: selection
+falsepositives:
+    - System administrators performing legitimate maintenance
+level: high

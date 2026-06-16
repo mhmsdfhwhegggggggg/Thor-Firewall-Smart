@@ -1,0 +1,22 @@
+title: AWS Security - IAM User Created
+id: defa51f8-cc3b-4c11-b12c-8f99a3f7d2c5
+status: stable
+description: Detects IAM User Created in AWS CloudTrail logs
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.defense_evasion
+    - cloud
+    - attack.t1136.003
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: 'aws.amazonaws.com'
+    condition: selection
+falsepositives:
+    - Authorized cloud administrators
+    - Automated infrastructure management
+level: high

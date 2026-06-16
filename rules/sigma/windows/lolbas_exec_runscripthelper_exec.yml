@@ -1,0 +1,26 @@
+title: LOLBAS Execution - runscripthelper_exec
+id: 5ed05bb6-ec8f-4889-96af-7b247c0c7712
+status: stable
+description: Detects abuse of runscripthelper_exec binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\runscripthelper_exec.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

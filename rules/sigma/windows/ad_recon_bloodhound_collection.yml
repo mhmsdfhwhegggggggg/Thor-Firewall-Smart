@@ -1,0 +1,24 @@
+title: Active Directory - BloodHound Collection
+id: 5bb47327-38a2-4974-94f0-b9914a7c65fc
+status: stable
+description: Detects BloodHound Collection against Active Directory infrastructure
+author: Thor Security Team
+date: 2024/07/01
+modified: 2025/02/28
+tags:
+    - attack.discovery
+    - attack.credential_access
+    - attack.t1087
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'SharpHound'
+            - 'bloodhound'
+    condition: selection
+falsepositives:
+    - Authorized penetration testing
+    - IT security audits
+level: high

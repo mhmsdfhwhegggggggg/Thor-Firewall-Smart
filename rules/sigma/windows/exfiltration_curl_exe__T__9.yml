@@ -1,0 +1,21 @@
+title: Data Exfiltration Method - curl_exe__T_
+id: d46bae39-b021-4767-97e9-44f582db2aad
+status: stable
+description: Detects potential data exfiltration using Windows built-in tools
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/05/01
+tags:
+    - attack.exfiltration
+    - attack.t1048
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'curl.exe.*-T '
+    condition: selection
+falsepositives:
+    - Legitimate file transfer operations
+    - Backup jobs
+level: medium

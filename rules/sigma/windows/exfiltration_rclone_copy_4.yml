@@ -1,0 +1,21 @@
+title: Data Exfiltration Method - rclone_copy
+id: fe193103-383b-4fa0-afec-1048b2a6b0c7
+status: stable
+description: Detects potential data exfiltration using Windows built-in tools
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/05/01
+tags:
+    - attack.exfiltration
+    - attack.t1048
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'rclone copy'
+    condition: selection
+falsepositives:
+    - Legitimate file transfer operations
+    - Backup jobs
+level: medium

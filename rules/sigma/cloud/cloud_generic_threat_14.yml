@@ -1,0 +1,21 @@
+title: Cloud Generic Threat Pattern 14
+id: 846cd125-3711-4eda-85fc-167b0b92b0e3
+status: stable
+description: Detects cloud environment threat pattern 14 involving unauthorized access or configuration changes
+author: Thor Security Team
+date: 2025/04/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.t1078.004
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        errorCode: 'AccessDenied'
+        userAgent|contains: 'python-requests'
+    condition: selection
+falsepositives:
+    - Misconfigured applications
+level: medium

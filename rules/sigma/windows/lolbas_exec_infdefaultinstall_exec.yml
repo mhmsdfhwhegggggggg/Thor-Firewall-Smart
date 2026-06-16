@@ -1,0 +1,26 @@
+title: LOLBAS Execution - infdefaultinstall_exec
+id: fdef2d0f-9322-400a-a069-b8abbbe5052f
+status: stable
+description: Detects abuse of infdefaultinstall_exec binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\infdefaultinstall_exec.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

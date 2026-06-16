@@ -1,0 +1,20 @@
+title: GCP Security - GCP Cloud Run Abuse
+id: d4a06b32-7c77-4595-9389-86fae13cfa79
+status: stable
+description: Detects GCP Cloud Run Abuse in GCP Audit Logs
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/06/01
+tags:
+    - attack.cloud
+    - attack.t1578
+logsource:
+    product: gcp
+    service: gcp.audit
+detection:
+    selection:
+        protoPayload.methodName|contains: 'run_abuse'
+    condition: selection
+falsepositives:
+    - Authorized GCP administrators
+level: high

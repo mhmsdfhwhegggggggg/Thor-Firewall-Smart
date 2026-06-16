@@ -1,0 +1,24 @@
+title: Windows Discovery Command - nslookup
+id: 2e33f8d4-d35f-4073-bc21-717a468e8c4b
+status: stable
+description: Detects use of 'nslookup' for system/network discovery
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/04/15
+tags:
+    - attack.discovery
+    - attack.t1082
+    - attack.t1016
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'nslookup'
+    filter_legitimate:
+        ParentImage|contains:
+            - '\explorer.exe'
+    condition: selection and not filter_legitimate
+falsepositives:
+    - System administrators running diagnostic commands
+level: low

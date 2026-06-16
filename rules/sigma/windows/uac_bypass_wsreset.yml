@@ -1,0 +1,26 @@
+title: UAC Bypass via wsreset
+id: 4e5713e5-d93f-4102-9789-d457caf87f68
+status: stable
+description: Detects UAC bypass technique using wsreset auto-elevation
+author: Thor Security Team
+date: 2024/03/01
+modified: 2025/01/10
+tags:
+    - attack.privilege_escalation
+    - attack.defense_evasion
+    - attack.t1548.002
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\wsreset.exe'
+        ParentImage|endswith:
+            - '\cmd.exe'
+            - '\powershell.exe'
+    filter_expected:
+        ParentImage|contains: '\system32\'
+    condition: selection and not filter_expected
+falsepositives:
+    - Administrative tasks
+level: high

@@ -1,0 +1,20 @@
+title: Linux Lateral Movement - Kubectl Lateral Movement
+id: d27e2611-50fd-4fcc-aa7d-b634e5a8476f
+status: stable
+description: Detects Kubectl Lateral Movement lateral movement technique
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1021
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'kubectl exec'
+    condition: selection
+falsepositives:
+    - Legitimate administrators
+level: medium

@@ -1,0 +1,21 @@
+title: Windows Persistence - Accessibility Features Backdoor
+id: 1c7b46e1-20aa-4f48-bc9c-6ea136e33bdd
+status: stable
+description: Detects Accessibility Features Backdoor persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1546.008
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'sethc.exe.*cmd.exe'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

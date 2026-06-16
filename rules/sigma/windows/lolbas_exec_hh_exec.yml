@@ -1,0 +1,26 @@
+title: LOLBAS Execution - hh_exec
+id: ad1608a8-66a3-4c17-96bb-57ef3e6fd6fe
+status: stable
+description: Detects abuse of hh_exec binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\hh_exec.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

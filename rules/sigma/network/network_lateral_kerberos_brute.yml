@@ -1,0 +1,20 @@
+title: Network Lateral - Kerberos Brute Force
+id: 657ec371-a1f9-4645-84ea-f57e68666c03
+status: stable
+description: Detects Kerberos Brute Force network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1110.003
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

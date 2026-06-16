@@ -1,0 +1,22 @@
+title: AWS Security - SSM Run Command Abuse
+id: 04a779b8-b0d7-4695-97f8-d0d21161e707
+status: stable
+description: Detects SSM Run Command Abuse in AWS CloudTrail logs
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.defense_evasion
+    - cloud
+    - attack.t1651
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: 'aws.amazonaws.com'
+    condition: selection
+falsepositives:
+    - Authorized cloud administrators
+    - Automated infrastructure management
+level: high

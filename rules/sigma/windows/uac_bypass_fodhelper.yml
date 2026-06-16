@@ -1,0 +1,26 @@
+title: UAC Bypass via fodhelper
+id: c206db57-57e2-4f07-a85f-60a92e55e25d
+status: stable
+description: Detects UAC bypass technique using fodhelper auto-elevation
+author: Thor Security Team
+date: 2024/03/01
+modified: 2025/01/10
+tags:
+    - attack.privilege_escalation
+    - attack.defense_evasion
+    - attack.t1548.002
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\fodhelper.exe'
+        ParentImage|endswith:
+            - '\cmd.exe'
+            - '\powershell.exe'
+    filter_expected:
+        ParentImage|contains: '\system32\'
+    condition: selection and not filter_expected
+falsepositives:
+    - Administrative tasks
+level: high

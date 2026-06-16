@@ -1,0 +1,20 @@
+title: Linux Shell Execution - Pattern _____________
+id: a322b74d-d2d2-40ad-bdd1-cdebdd85be93
+status: stable
+description: Detects suspicious shell execution pattern matching known malware or reverse shell techniques
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'curl.*'
+    condition: selection
+falsepositives:
+    - Legitimate automation scripts
+level: medium

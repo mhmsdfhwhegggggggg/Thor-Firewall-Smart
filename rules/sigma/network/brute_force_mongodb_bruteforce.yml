@@ -1,0 +1,21 @@
+title: Brute Force Attack - mongodb_bruteforce
+id: f6ee1d59-35a7-4efb-a432-d1e6ab921701
+status: stable
+description: Detects brute force authentication attacks targeting mongodb_bruteforce
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.credential_access
+    - attack.t1110.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        EventType: 'authentication_failure'
+        Count|gt: 10
+    condition: selection
+falsepositives:
+    - Password policy enforcement tools
+level: medium

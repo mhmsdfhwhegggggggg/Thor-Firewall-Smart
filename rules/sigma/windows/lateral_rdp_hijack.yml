@@ -1,0 +1,22 @@
+title: Lateral Movement - RDP Session Hijacking
+id: 579fc947-2977-4d54-af45-b047e522adbf
+status: stable
+description: Detects RDP Session Hijacking lateral movement technique
+author: Thor Security Team
+date: 2024/08/15
+modified: 2025/01/20
+tags:
+    - attack.lateral_movement
+    - attack.t1563.002
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'tscon'
+            - 'query session'
+    condition: selection
+falsepositives:
+    - Legitimate remote administration
+level: high

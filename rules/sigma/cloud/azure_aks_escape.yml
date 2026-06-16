@@ -1,0 +1,20 @@
+title: Azure Security - AKS Pod Escape
+id: 1b36e490-9aaf-419a-9804-93f6277e415d
+status: stable
+description: Detects AKS Pod Escape in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1611
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'aks_escape'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

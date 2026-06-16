@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Drive Enumeration for Encryption
+id: 11ea6ce1-fb01-466f-a48e-55067093a594
+status: stable
+description: Detects Drive Enumeration for Encryption behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1120
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'GetDriveType.*DRIVE_FIXED'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

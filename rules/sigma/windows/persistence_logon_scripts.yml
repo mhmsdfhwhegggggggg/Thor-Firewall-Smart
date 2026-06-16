@@ -1,0 +1,21 @@
+title: Windows Persistence - Logon Script Persistence
+id: 25ae104e-eafc-4abe-8221-93d210a5a41a
+status: stable
+description: Detects Logon Script Persistence persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1037.001
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'HKCU\\Environment.*UserInitMprLogonScript'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

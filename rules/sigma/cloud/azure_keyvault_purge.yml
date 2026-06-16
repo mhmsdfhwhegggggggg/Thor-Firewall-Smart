@@ -1,0 +1,20 @@
+title: Azure Security - Azure Key Vault Purge Protection Disabled
+id: a796e90a-ce44-4881-82d7-2d30a2ceb495
+status: stable
+description: Detects Azure Key Vault Purge Protection Disabled in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1485
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'keyvault_purge'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

@@ -1,0 +1,20 @@
+title: Tunneling/Proxy Detection - freenet_conn
+id: 77be7793-0de1-4e8f-b653-aa6a816c15fb
+status: stable
+description: Detects suspicious tunneling or proxy usage via freenet_conn
+author: Thor Security Team
+date: 2025/01/15
+modified: 2025/06/01
+tags:
+    - attack.command_and_control
+    - attack.t1090
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'freenet_conn'
+    condition: selection
+falsepositives:
+    - VPN administrators
+level: medium

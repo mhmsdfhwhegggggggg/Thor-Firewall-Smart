@@ -1,0 +1,28 @@
+title: Network C2 - DNS Tunneling via dnscat2
+id: 632071e4-1e2c-4b0c-b668-116e63af1f8b
+status: stable
+description: Detects DNS Tunneling via dnscat2 network communication
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.command_and_control
+    - attack.t1071.004
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 53
+            - 443
+            - 80
+            - 8080
+            - 8443
+        CommandLine|contains:
+            - 'dnscat'
+    condition: selection
+falsepositives:
+    - Legitimate network monitoring tools
+level: high

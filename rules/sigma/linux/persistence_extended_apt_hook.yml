@@ -1,0 +1,21 @@
+title: Linux Persistence - APT Hook Backdoor
+id: b8b7ba4a-676d-43f2-af4c-6996b2d7dc6e
+status: stable
+description: Detects APT Hook Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1546
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '/etc/apt/apt.conf.d.*DPkg::Post'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

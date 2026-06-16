@@ -1,0 +1,21 @@
+title: Linux Persistence - D-Bus Service Activation Backdoor
+id: 6c350e39-7f93-41d4-9a67-7207271b12f5
+status: stable
+description: Detects D-Bus Service Activation Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1546
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '/usr/share/dbus-1/system-services'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

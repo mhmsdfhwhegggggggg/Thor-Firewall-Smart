@@ -1,0 +1,20 @@
+title: Linux Discovery - Sudo Rights Discovery
+id: 064cf3c3-b154-4d8b-84c8-2bc6b5493926
+status: stable
+description: Detects Sudo Rights Discovery on Linux systems
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/01
+tags:
+    - attack.discovery
+    - attack.t1069.001
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'sudo -l'
+    condition: selection
+falsepositives:
+    - System administrators performing audits
+level: low

@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s Pod with Seccomp Unconfined
+id: c1f175d4-8963-467a-8dc8-f857fea9ba07
+status: stable
+description: Detects K8s Pod with Seccomp Unconfined in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1611
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

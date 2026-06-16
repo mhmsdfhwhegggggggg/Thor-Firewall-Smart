@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s Always Pull Disabled
+id: 6793475f-36a2-4db5-8819-5a34fadbca00
+status: stable
+description: Detects K8s Always Pull Disabled in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1525
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

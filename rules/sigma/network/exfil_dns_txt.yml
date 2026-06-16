@@ -1,0 +1,22 @@
+title: Network Exfiltration - DNS TXT Record Exfiltration
+id: b290c241-60ab-43c4-8c2a-cca178a5f7ba
+status: stable
+description: Detects DNS TXT Record Exfiltration data exfiltration over network
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/05/15
+tags:
+    - attack.exfiltration
+    - attack.t1048.003
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        BytesSent|gt: 10000000
+    condition: selection
+falsepositives:
+    - Legitimate large file transfers
+    - Backup operations
+level: medium

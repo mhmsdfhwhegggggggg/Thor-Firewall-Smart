@@ -1,0 +1,20 @@
+title: GCP Security - GCP Service Account Key Created
+id: 2985475c-f85b-4749-a2df-9e31a1530e87
+status: stable
+description: Detects GCP Service Account Key Created in GCP Audit Logs
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/06/01
+tags:
+    - attack.cloud
+    - attack.t1098
+logsource:
+    product: gcp
+    service: gcp.audit
+detection:
+    selection:
+        protoPayload.methodName|contains: 'sa_key_create'
+    condition: selection
+falsepositives:
+    - Authorized GCP administrators
+level: high

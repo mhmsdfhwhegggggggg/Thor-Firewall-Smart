@@ -1,0 +1,24 @@
+title: Active Directory - DCSync Attack
+id: 34262e5b-c6a8-46d4-9965-b10aba426ee5
+status: stable
+description: Detects DCSync Attack against Active Directory infrastructure
+author: Thor Security Team
+date: 2024/07/01
+modified: 2025/02/28
+tags:
+    - attack.discovery
+    - attack.credential_access
+    - attack.t1003.006
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'drsuapi'
+            - 'DsGetNCChanges'
+    condition: selection
+falsepositives:
+    - Authorized penetration testing
+    - IT security audits
+level: high

@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s Mass Pod Deletion
+id: 8eb704e8-a5f0-46e7-b216-b71b2a00719a
+status: stable
+description: Detects K8s Mass Pod Deletion in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1485
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

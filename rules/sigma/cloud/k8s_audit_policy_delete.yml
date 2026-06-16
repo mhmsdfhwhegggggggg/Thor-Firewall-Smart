@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s Audit Policy Deleted
+id: 4822778e-c645-416c-bc63-fb73db2a0264
+status: stable
+description: Detects K8s Audit Policy Deleted in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1562
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

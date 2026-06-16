@@ -1,0 +1,20 @@
+title: Network Lateral - VLAN Hopping Attack
+id: a0a9fa9b-cd36-4940-81b5-795d74ee9d0b
+status: stable
+description: Detects VLAN Hopping Attack network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1599
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

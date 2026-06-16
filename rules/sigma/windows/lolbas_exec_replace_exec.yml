@@ -1,0 +1,26 @@
+title: LOLBAS Execution - replace_exec
+id: a165a556-a4fd-4dc5-af46-6fabc926cc73
+status: stable
+description: Detects abuse of replace_exec binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\replace_exec.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

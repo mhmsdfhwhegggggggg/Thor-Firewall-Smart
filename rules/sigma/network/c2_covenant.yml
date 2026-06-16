@@ -1,0 +1,28 @@
+title: Network C2 - Covenant C2
+id: 29efa2df-7a7a-4a9c-b841-7d10fe80f8f1
+status: stable
+description: Detects Covenant C2 network communication
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.command_and_control
+    - attack.t1071.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 53
+            - 443
+            - 80
+            - 8080
+            - 8443
+        CommandLine|contains:
+            - 'covenant.*grunt'
+    condition: selection
+falsepositives:
+    - Legitimate network monitoring tools
+level: high

@@ -1,0 +1,26 @@
+title: LOLBAS Execution - rpcping_exec
+id: f21b30a9-478e-4a0f-a01f-1894c741dad3
+status: stable
+description: Detects abuse of rpcping_exec binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\rpcping_exec.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

@@ -1,0 +1,20 @@
+title: Linux Shell Execution - Pattern _____________
+id: cdda3c50-c9de-44c7-9a88-39d98ff81b29
+status: stable
+description: Detects suspicious shell execution pattern matching known malware or reverse shell techniques
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'xterm -display'
+    condition: selection
+falsepositives:
+    - Legitimate automation scripts
+level: medium

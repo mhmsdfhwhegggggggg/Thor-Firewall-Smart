@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s Container from Untrusted Registry
+id: ccc49591-f65a-4c90-9e16-453fee227791
+status: stable
+description: Detects K8s Container from Untrusted Registry in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1525
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

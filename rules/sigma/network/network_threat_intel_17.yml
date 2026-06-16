@@ -1,0 +1,29 @@
+title: Network Threat Intelligence Pattern 17
+id: aefcd6b7-426c-4c34-bcd8-2f6d9fad165d
+status: stable
+description: Detects network communication matching threat intelligence pattern 17 including known malicious IPs, DGA domains, and C2 protocols
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.command_and_control
+    - attack.t1071.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 1337
+            - 31337
+            - 4444
+            - 5555
+            - 6666
+            - 7777
+            - 8888
+            - 9999
+    condition: selection
+falsepositives:
+    - Development environments using non-standard ports
+level: medium

@@ -1,0 +1,30 @@
+title: LOLBAS Abuse via wmic
+id: 839e2c0c-a070-4454-ae07-fecc037f2dff
+status: stable
+description: Detects abuse of legitimate Windows binary wmic for malicious purposes (Living off the Land)
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/02/10
+tags:
+    - attack.defense_evasion
+    - attack.execution
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\wmic.exe'
+        CommandLine|contains:
+            - 'http'
+            - 'ftp'
+            - '/e:javascript'
+            - 'scrobj'
+    filter:
+        ParentImage|contains:
+            - '\explorer.exe'
+            - '\services.exe'
+    condition: selection and not filter
+falsepositives:
+    - Legitimate administrative use
+level: medium

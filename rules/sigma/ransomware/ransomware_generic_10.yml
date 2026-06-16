@@ -1,0 +1,23 @@
+title: Generic Ransomware Indicator 10
+id: 21aab246-d2ea-4fc3-971e-703a6aa9616e
+status: stable
+description: Detects generic ransomware behavior indicator 10
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'encrypt'
+            - '.locked'
+            - 'ransom'
+    condition: selection
+falsepositives:
+    - Legitimate encryption software
+level: high

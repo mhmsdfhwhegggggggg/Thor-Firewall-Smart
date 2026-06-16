@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s RBAC Privilege Escalation
+id: c0670433-4a52-48ad-abc3-a15e42ea9900
+status: stable
+description: Detects K8s RBAC Privilege Escalation in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1078.003
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

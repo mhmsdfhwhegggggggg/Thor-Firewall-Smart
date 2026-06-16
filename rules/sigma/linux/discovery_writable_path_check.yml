@@ -1,0 +1,20 @@
+title: Linux Discovery - Writable PATH Discovery
+id: b0b5d1eb-2fe5-4669-b0dc-a4f982f116f9
+status: stable
+description: Detects Writable PATH Discovery on Linux systems
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/01
+tags:
+    - attack.discovery
+    - attack.t1574.006
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'find /usr/local/bin -writable'
+    condition: selection
+falsepositives:
+    - System administrators performing audits
+level: low

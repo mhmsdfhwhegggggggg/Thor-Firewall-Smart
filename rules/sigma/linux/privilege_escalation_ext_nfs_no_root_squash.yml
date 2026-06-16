@@ -1,0 +1,22 @@
+title: Linux Privilege Escalation - NFS No Root Squash
+id: 1667263b-9d41-4da4-bf78-bd41c70d3a60
+status: stable
+description: Detects NFS No Root Squash privilege escalation technique
+author: Thor Security Team
+date: 2024/09/15
+modified: 2025/04/01
+tags:
+    - attack.privilege_escalation
+    - attack.t1548
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'no_root_squash'
+            - 'mount.*nfs.*rw'
+    condition: selection
+falsepositives:
+    - System administrators performing legitimate maintenance
+level: high

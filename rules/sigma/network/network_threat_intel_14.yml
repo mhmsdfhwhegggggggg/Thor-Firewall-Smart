@@ -1,0 +1,29 @@
+title: Network Threat Intelligence Pattern 14
+id: 85ca0efb-c253-4f56-a169-9ff420a3e59d
+status: stable
+description: Detects network communication matching threat intelligence pattern 14 including known malicious IPs, DGA domains, and C2 protocols
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.command_and_control
+    - attack.t1071.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 1337
+            - 31337
+            - 4444
+            - 5555
+            - 6666
+            - 7777
+            - 8888
+            - 9999
+    condition: selection
+falsepositives:
+    - Development environments using non-standard ports
+level: medium

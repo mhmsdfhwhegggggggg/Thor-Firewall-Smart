@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Terminal Server Session Encryption
+id: 38bf9f77-67ee-4103-a376-586093cbd93d
+status: stable
+description: Detects Terminal Server Session Encryption behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1563
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'tscon.*\\\\'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

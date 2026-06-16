@@ -1,0 +1,21 @@
+title: Windows Persistence - WMI Event Subscription
+id: 0278c5ea-9e9e-4e18-a82d-4beaf4f5780c
+status: stable
+description: Detects WMI Event Subscription persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1546.003
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - '__EventFilter'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

@@ -1,0 +1,21 @@
+title: Data Exfiltration Method - certutil__urlcache
+id: a5e55765-cfdb-47b5-b917-6068c75ed429
+status: stable
+description: Detects potential data exfiltration using Windows built-in tools
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/05/01
+tags:
+    - attack.exfiltration
+    - attack.t1048
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'certutil -urlcache'
+    condition: selection
+falsepositives:
+    - Legitimate file transfer operations
+    - Backup jobs
+level: medium

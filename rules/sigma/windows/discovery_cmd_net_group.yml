@@ -1,0 +1,24 @@
+title: Windows Discovery Command - net group
+id: febaadf3-e4f5-4799-a09a-31a31d53d058
+status: stable
+description: Detects use of 'net group' for system/network discovery
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/04/15
+tags:
+    - attack.discovery
+    - attack.t1082
+    - attack.t1016
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'net group'
+    filter_legitimate:
+        ParentImage|contains:
+            - '\explorer.exe'
+    condition: selection and not filter_legitimate
+falsepositives:
+    - System administrators running diagnostic commands
+level: low

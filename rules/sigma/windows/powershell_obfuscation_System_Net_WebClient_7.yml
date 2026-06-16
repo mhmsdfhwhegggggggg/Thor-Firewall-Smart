@@ -1,0 +1,29 @@
+title: PowerShell Obfuscation Pattern - System_Net_WebClient
+id: dfd05e7b-33e0-4dcb-ba9b-7f4e035d60a1
+status: stable
+description: Detects PowerShell using obfuscation or bypass technique involving System.Net.WebClient
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/03/01
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1059.001
+    - attack.t1027
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith:
+            - '\powershell.exe'
+            - '\pwsh.exe'
+        CommandLine|contains: 'System.Net.WebClient'
+    filter_admin:
+        User|contains:
+            - 'SYSTEM'
+    condition: selection and not filter_admin
+falsepositives:
+    - Legitimate PowerShell automation scripts
+    - System management tasks
+level: high

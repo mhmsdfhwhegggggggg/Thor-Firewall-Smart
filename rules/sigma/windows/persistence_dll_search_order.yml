@@ -1,0 +1,21 @@
+title: Windows Persistence - DLL Search Order Hijacking
+id: eef996e4-668d-44cf-b6c1-307a4fff95d9
+status: stable
+description: Detects DLL Search Order Hijacking persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1574.001
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - '\\AppData\\Local.*\.dll'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

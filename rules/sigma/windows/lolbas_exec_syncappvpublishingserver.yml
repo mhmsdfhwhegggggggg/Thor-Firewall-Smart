@@ -1,0 +1,26 @@
+title: LOLBAS Execution - syncappvpublishingserver
+id: 44d20136-e24d-4b7d-9b3a-cc5668b82f16
+status: stable
+description: Detects abuse of syncappvpublishingserver binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\syncappvpublishingserver.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

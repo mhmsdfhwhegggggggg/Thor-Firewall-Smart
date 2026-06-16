@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Reboot into Safe Mode for Evasion
+id: e56aae27-abdf-460e-92c4-e473e289047f
+status: stable
+description: Detects Reboot into Safe Mode for Evasion behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1562
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'bcdedit.*safeboot.*network'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

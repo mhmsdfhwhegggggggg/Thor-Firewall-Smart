@@ -1,0 +1,20 @@
+title: Linux Discovery - DNS Zone Transfer
+id: 5192ddfd-325a-4ba6-b853-14fbed95ded3
+status: stable
+description: Detects DNS Zone Transfer on Linux systems
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/01
+tags:
+    - attack.discovery
+    - attack.t1590.002
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'dig AXFR'
+    condition: selection
+falsepositives:
+    - System administrators performing audits
+level: low

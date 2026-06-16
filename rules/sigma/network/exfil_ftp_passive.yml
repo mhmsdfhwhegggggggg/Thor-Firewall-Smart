@@ -1,0 +1,22 @@
+title: Network Exfiltration - FTP Passive Mode Exfiltration
+id: bcf00618-bdf2-48a3-8189-9e1d82aa5ad6
+status: stable
+description: Detects FTP Passive Mode Exfiltration data exfiltration over network
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/05/15
+tags:
+    - attack.exfiltration
+    - attack.t1048.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        BytesSent|gt: 10000000
+    condition: selection
+falsepositives:
+    - Legitimate large file transfers
+    - Backup operations
+level: medium

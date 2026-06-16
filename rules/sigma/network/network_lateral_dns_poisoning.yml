@@ -1,0 +1,20 @@
+title: Network Lateral - DNS Cache Poisoning
+id: 495e169b-1930-4dbe-8f4c-c3ff2f697a5d
+status: stable
+description: Detects DNS Cache Poisoning network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1557
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

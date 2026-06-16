@@ -1,0 +1,20 @@
+title: Network Port Scan - ack_scan
+id: 3569774f-7fad-4303-9c05-86d461757c5e
+status: stable
+description: Detects ack_scan network reconnaissance technique
+author: Thor Security Team
+date: 2024/10/15
+modified: 2025/04/01
+tags:
+    - attack.discovery
+    - attack.t1046
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'nmap'
+    condition: selection
+falsepositives:
+    - Authorized network scanning by security team
+level: medium

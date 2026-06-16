@@ -1,0 +1,21 @@
+title: Cloud Generic Threat Pattern 3
+id: f8980517-586e-4d6d-828c-c7d5edf004ff
+status: stable
+description: Detects cloud environment threat pattern 3 involving unauthorized access or configuration changes
+author: Thor Security Team
+date: 2025/04/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.t1078.004
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        errorCode: 'AccessDenied'
+        userAgent|contains: 'python-requests'
+    condition: selection
+falsepositives:
+    - Misconfigured applications
+level: medium

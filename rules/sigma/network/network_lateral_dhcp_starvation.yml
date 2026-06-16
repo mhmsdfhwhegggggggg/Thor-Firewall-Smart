@@ -1,0 +1,20 @@
+title: Network Lateral - DHCP Starvation Attack
+id: 0fed1262-b011-46c7-91c0-49d2116a2f89
+status: stable
+description: Detects DHCP Starvation Attack network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1498
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

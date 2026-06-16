@@ -1,0 +1,22 @@
+title: AWS Security - AWS KMS Key Deleted
+id: 9ca3541e-6218-4536-af53-75a7b701a3c5
+status: stable
+description: Detects AWS KMS Key Deleted in AWS CloudTrail logs
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.defense_evasion
+    - cloud
+    - attack.t1485
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: 'aws.amazonaws.com'
+    condition: selection
+falsepositives:
+    - Authorized cloud administrators
+    - Automated infrastructure management
+level: high

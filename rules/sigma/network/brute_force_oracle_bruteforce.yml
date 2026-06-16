@@ -1,0 +1,21 @@
+title: Brute Force Attack - oracle_bruteforce
+id: 90e5498b-d572-4af3-91c9-34c95d0438f6
+status: stable
+description: Detects brute force authentication attacks targeting oracle_bruteforce
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.credential_access
+    - attack.t1110.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        EventType: 'authentication_failure'
+        Count|gt: 10
+    condition: selection
+falsepositives:
+    - Password policy enforcement tools
+level: medium

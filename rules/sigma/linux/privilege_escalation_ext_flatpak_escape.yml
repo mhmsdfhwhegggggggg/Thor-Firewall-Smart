@@ -1,0 +1,22 @@
+title: Linux Privilege Escalation - Flatpak Sandbox Escape
+id: cd5f9f73-e9d3-4fd7-a85d-dc0085f2e91d
+status: stable
+description: Detects Flatpak Sandbox Escape privilege escalation technique
+author: Thor Security Team
+date: 2024/09/15
+modified: 2025/04/01
+tags:
+    - attack.privilege_escalation
+    - attack.t1059
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'flatpak run.*--share=host'
+            - 'flatpak.*--filesystem=host'
+    condition: selection
+falsepositives:
+    - System administrators performing legitimate maintenance
+level: high

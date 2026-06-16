@@ -1,0 +1,28 @@
+title: Network C2 - HTTP Beaconing with Jitter
+id: c1ff0965-7b6d-4291-b961-1d1d6274243c
+status: stable
+description: Detects HTTP Beaconing with Jitter network communication
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.command_and_control
+    - attack.t1071.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 53
+            - 443
+            - 80
+            - 8080
+            - 8443
+        CommandLine|contains:
+            - 'X-Forwarded-Host.*beacon'
+    condition: selection
+falsepositives:
+    - Legitimate network monitoring tools
+level: high

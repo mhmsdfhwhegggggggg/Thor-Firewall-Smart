@@ -1,0 +1,20 @@
+title: Linux Discovery - Cloud Instance Metadata Query
+id: ea481972-02fb-47e5-92b1-95289a139b71
+status: stable
+description: Detects Cloud Instance Metadata Query on Linux systems
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/01
+tags:
+    - attack.discovery
+    - attack.t1552.005
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: '169.254.169.254'
+    condition: selection
+falsepositives:
+    - System administrators performing audits
+level: low

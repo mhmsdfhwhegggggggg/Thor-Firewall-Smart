@@ -1,0 +1,21 @@
+title: Linux Persistence - Udev Rules Backdoor
+id: d0555ac3-e1e6-4adf-91c6-d85252c39e4d
+status: stable
+description: Detects Udev Rules Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1546
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '/etc/udev/rules.d.*RUN+='
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

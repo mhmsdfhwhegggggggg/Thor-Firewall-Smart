@@ -1,0 +1,21 @@
+title: Linux Persistence - GNOME Extension Backdoor
+id: dc105057-d799-45a7-b76d-5fdfe5677d7f
+status: stable
+description: Detects GNOME Extension Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1176
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '~/.local/share/gnome-shell/extensions'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

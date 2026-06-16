@@ -1,0 +1,20 @@
+title: Cleartext Protocol / Amplification - ntp_amplify
+id: 8bd87206-835d-4d42-b733-8cc4d3218717
+status: stable
+description: Detects insecure or abused protocol usage: ntp_amplify
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/03/10
+tags:
+    - attack.initial_access
+    - attack.t1190
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Protocol: 'tcp'
+    condition: selection
+falsepositives:
+    - Legacy systems requiring old protocols
+level: low

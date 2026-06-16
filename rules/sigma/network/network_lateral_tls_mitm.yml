@@ -1,0 +1,20 @@
+title: Network Lateral - TLS MitM via Rogue CA
+id: a8b95816-a2d5-40f4-ba58-25a881923f27
+status: stable
+description: Detects TLS MitM via Rogue CA network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1557.002
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

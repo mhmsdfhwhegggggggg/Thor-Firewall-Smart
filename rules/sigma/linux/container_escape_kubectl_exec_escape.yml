@@ -1,0 +1,24 @@
+title: Container Escape - Kubectl Exec Container Escape
+id: 3ae30abd-1b26-452c-be6c-ba55faf740a2
+status: stable
+description: Detects Kubectl Exec Container Escape container escape technique
+author: Thor Security Team
+date: 2024/06/15
+modified: 2025/03/01
+tags:
+    - attack.privilege_escalation
+    - attack.lateral_movement
+    - attack.t1609
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'kubectl exec.*--stdin'
+            - 'kubectl exec.*-it'
+    condition: selection
+falsepositives:
+    - Container administrators with legitimate privileged access
+    - Security testing environments
+level: critical

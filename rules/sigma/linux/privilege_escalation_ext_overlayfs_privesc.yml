@@ -1,0 +1,22 @@
+title: Linux Privilege Escalation - OverlayFS Privilege Escalation
+id: 19e762bd-292a-447d-bdfe-170ce3ac3f25
+status: stable
+description: Detects OverlayFS Privilege Escalation privilege escalation technique
+author: Thor Security Team
+date: 2024/09/15
+modified: 2025/04/01
+tags:
+    - attack.privilege_escalation
+    - attack.t1068
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'mount -t overlay.*rw'
+            - 'OverlayFS.*privesc'
+    condition: selection
+falsepositives:
+    - System administrators performing legitimate maintenance
+level: high

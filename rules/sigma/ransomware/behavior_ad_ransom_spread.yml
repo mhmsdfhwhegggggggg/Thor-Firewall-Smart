@@ -1,0 +1,22 @@
+title: Ransomware Behavior - AD-Based Ransomware Propagation
+id: 20020489-c118-478d-b563-efaadcdb61dd
+status: stable
+description: Detects AD-Based Ransomware Propagation behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'Invoke-SMBExec.*encrypt'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

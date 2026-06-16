@@ -1,0 +1,20 @@
+title: Linux Discovery - Container Environment Enumeration
+id: 53c877be-2e02-4ff5-b11a-3891d1f65e52
+status: stable
+description: Detects Container Environment Enumeration on Linux systems
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/01
+tags:
+    - attack.discovery
+    - attack.t1082
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: '.dockerenv'
+    condition: selection
+falsepositives:
+    - System administrators performing audits
+level: low

@@ -1,0 +1,21 @@
+title: Linux Persistence - XDG Autostart Backdoor
+id: d6f6b7e2-8d0f-4412-8641-c8bf3a7e898b
+status: stable
+description: Detects XDG Autostart Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1547.013
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '~/.config/autostart'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

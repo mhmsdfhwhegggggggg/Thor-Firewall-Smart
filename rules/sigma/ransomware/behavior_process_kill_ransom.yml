@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Process Termination before Encryption
+id: 11730a22-316c-42da-99ae-2e01cbe0d6d3
+status: stable
+description: Detects Process Termination before Encryption behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'taskkill.*sql.*oracle.*backup'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

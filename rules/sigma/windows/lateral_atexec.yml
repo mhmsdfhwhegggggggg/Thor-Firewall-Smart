@@ -1,0 +1,22 @@
+title: Lateral Movement - AT/Schtasks Remote Execution
+id: baa967e8-db69-4330-9eb7-00ec156d252b
+status: stable
+description: Detects AT/Schtasks Remote Execution lateral movement technique
+author: Thor Security Team
+date: 2024/08/15
+modified: 2025/01/20
+tags:
+    - attack.lateral_movement
+    - attack.t1053.005
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'schtasks /create.*\\'
+            - '/s '
+    condition: selection
+falsepositives:
+    - Legitimate remote administration
+level: high

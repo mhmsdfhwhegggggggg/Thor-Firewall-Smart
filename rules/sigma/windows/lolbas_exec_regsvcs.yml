@@ -1,0 +1,26 @@
+title: LOLBAS Execution - regsvcs
+id: 3f58c032-64a7-46cd-b925-d2ea1195a4b2
+status: stable
+description: Detects abuse of regsvcs binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\regsvcs.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

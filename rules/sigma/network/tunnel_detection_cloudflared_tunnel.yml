@@ -1,0 +1,20 @@
+title: Tunneling/Proxy Detection - cloudflared_tunnel
+id: 21e4ad37-1b4a-4091-806a-5b0a090b74d1
+status: stable
+description: Detects suspicious tunneling or proxy usage via cloudflared_tunnel
+author: Thor Security Team
+date: 2025/01/15
+modified: 2025/06/01
+tags:
+    - attack.command_and_control
+    - attack.t1090
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'cloudflared_tunnel'
+    condition: selection
+falsepositives:
+    - VPN administrators
+level: medium

@@ -1,0 +1,20 @@
+title: Azure Security - Azure Automation Runbook Abuse
+id: 6a341ae1-4036-4b3e-a916-da88b70d4402
+status: stable
+description: Detects Azure Automation Runbook Abuse in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1651
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'runbook_abuse'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

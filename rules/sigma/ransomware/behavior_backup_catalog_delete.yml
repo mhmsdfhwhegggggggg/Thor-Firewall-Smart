@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Windows Backup Catalog Deletion
+id: ad6352bf-19be-4847-9d82-fe2fc15f0934
+status: stable
+description: Detects Windows Backup Catalog Deletion behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1490
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'wbadmin delete catalog'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

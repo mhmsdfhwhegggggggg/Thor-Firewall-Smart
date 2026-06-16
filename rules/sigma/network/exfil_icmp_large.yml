@@ -1,0 +1,22 @@
+title: Network Exfiltration - ICMP Large Payload Exfiltration
+id: 7d88493d-5fe5-4ee7-b8a9-91b3d708edcc
+status: stable
+description: Detects ICMP Large Payload Exfiltration data exfiltration over network
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/05/15
+tags:
+    - attack.exfiltration
+    - attack.t1048.003
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        BytesSent|gt: 10000000
+    condition: selection
+falsepositives:
+    - Legitimate large file transfers
+    - Backup operations
+level: medium

@@ -1,0 +1,20 @@
+title: Tunneling/Proxy Detection - chisel_tunnel
+id: b407273c-03b4-47b7-9f06-d4bc981200c2
+status: stable
+description: Detects suspicious tunneling or proxy usage via chisel_tunnel
+author: Thor Security Team
+date: 2025/01/15
+modified: 2025/06/01
+tags:
+    - attack.command_and_control
+    - attack.t1090
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'chisel_tunnel'
+    condition: selection
+falsepositives:
+    - VPN administrators
+level: medium

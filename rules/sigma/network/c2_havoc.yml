@@ -1,0 +1,28 @@
+title: Network C2 - Havoc C2 Framework
+id: 8fc0e9da-d12b-4de0-81e8-176a158e7e44
+status: stable
+description: Detects Havoc C2 Framework network communication
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.command_and_control
+    - attack.t1071.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 53
+            - 443
+            - 80
+            - 8080
+            - 8443
+        CommandLine|contains:
+            - 'havoc.*teamserver'
+    condition: selection
+falsepositives:
+    - Legitimate network monitoring tools
+level: high

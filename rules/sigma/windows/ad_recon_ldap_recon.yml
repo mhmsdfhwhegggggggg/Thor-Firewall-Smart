@@ -1,0 +1,24 @@
+title: Active Directory - LDAP Enumeration
+id: dbb71269-d3a3-448b-b6c3-65e24013c266
+status: stable
+description: Detects LDAP Enumeration against Active Directory infrastructure
+author: Thor Security Team
+date: 2024/07/01
+modified: 2025/02/28
+tags:
+    - attack.discovery
+    - attack.credential_access
+    - attack.t1018
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'Get-ADComputer'
+            - 'ldapsearch'
+    condition: selection
+falsepositives:
+    - Authorized penetration testing
+    - IT security audits
+level: high

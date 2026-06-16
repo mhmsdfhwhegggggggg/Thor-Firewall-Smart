@@ -1,0 +1,20 @@
+title: Network Port Scan - window_scan
+id: faf19fd1-3c20-4168-80df-d3d2ee5aee4f
+status: stable
+description: Detects window_scan network reconnaissance technique
+author: Thor Security Team
+date: 2024/10/15
+modified: 2025/04/01
+tags:
+    - attack.discovery
+    - attack.t1046
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'nmap'
+    condition: selection
+falsepositives:
+    - Authorized network scanning by security team
+level: medium

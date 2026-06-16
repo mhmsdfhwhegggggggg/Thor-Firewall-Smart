@@ -1,0 +1,29 @@
+title: Network Threat Intelligence Pattern 29
+id: 57229ea4-60e9-43ba-9d65-8610702e10b5
+status: stable
+description: Detects network communication matching threat intelligence pattern 29 including known malicious IPs, DGA domains, and C2 protocols
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.command_and_control
+    - attack.t1071.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 1337
+            - 31337
+            - 4444
+            - 5555
+            - 6666
+            - 7777
+            - 8888
+            - 9999
+    condition: selection
+falsepositives:
+    - Development environments using non-standard ports
+level: medium

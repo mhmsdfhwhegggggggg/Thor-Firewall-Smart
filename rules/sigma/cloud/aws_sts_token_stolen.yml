@@ -1,0 +1,22 @@
+title: AWS Security - STS Token Theft Indicators
+id: 8dc24866-3ffa-4393-90ae-46ce58b82ad5
+status: stable
+description: Detects STS Token Theft Indicators in AWS CloudTrail logs
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.defense_evasion
+    - cloud
+    - attack.t1528
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: 'aws.amazonaws.com'
+    condition: selection
+falsepositives:
+    - Authorized cloud administrators
+    - Automated infrastructure management
+level: high

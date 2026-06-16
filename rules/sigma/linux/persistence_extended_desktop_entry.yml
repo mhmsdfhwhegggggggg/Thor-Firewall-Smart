@@ -1,0 +1,21 @@
+title: Linux Persistence - Malicious Desktop Entry
+id: 3f9b4380-569b-426e-9e5d-912430b1a8e9
+status: stable
+description: Detects Malicious Desktop Entry Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1547
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '\.desktop.*Exec=.*http'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

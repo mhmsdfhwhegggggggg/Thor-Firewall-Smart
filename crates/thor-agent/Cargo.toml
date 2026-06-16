@@ -84,3 +84,11 @@ mimalloc          = { version = "0.1", default-features = false }
 
 [profile.release]
 inherits = "release"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile  = "3.10"
+
+[[bench]]
+name    = "sigma_engine"
+harness = false

@@ -1,0 +1,20 @@
+title: GCP Security - GCP KMS Key Destroyed
+id: 2384e135-9ac4-4942-be3f-5b61a614388a
+status: stable
+description: Detects GCP KMS Key Destroyed in GCP Audit Logs
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/06/01
+tags:
+    - attack.cloud
+    - attack.t1485
+logsource:
+    product: gcp
+    service: gcp.audit
+detection:
+    selection:
+        protoPayload.methodName|contains: 'kms_key_destroy'
+    condition: selection
+falsepositives:
+    - Authorized GCP administrators
+level: high

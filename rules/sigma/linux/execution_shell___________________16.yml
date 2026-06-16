@@ -1,0 +1,20 @@
+title: Linux Shell Execution - Pattern _________________
+id: 5db2789e-49fa-49df-9084-98b80390ad1f
+status: stable
+description: Detects suspicious shell execution pattern matching known malware or reverse shell techniques
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'php.*exec.*base64'
+    condition: selection
+falsepositives:
+    - Legitimate automation scripts
+level: medium

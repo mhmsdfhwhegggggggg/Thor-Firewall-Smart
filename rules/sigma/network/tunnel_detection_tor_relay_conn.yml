@@ -1,0 +1,20 @@
+title: Tunneling/Proxy Detection - tor_relay_conn
+id: 2b745ac4-9514-4dd4-9099-60e14a92c980
+status: stable
+description: Detects suspicious tunneling or proxy usage via tor_relay_conn
+author: Thor Security Team
+date: 2025/01/15
+modified: 2025/06/01
+tags:
+    - attack.command_and_control
+    - attack.t1090
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'tor_relay_conn'
+    condition: selection
+falsepositives:
+    - VPN administrators
+level: medium

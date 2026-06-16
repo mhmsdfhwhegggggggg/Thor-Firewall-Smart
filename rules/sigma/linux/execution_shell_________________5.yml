@@ -1,0 +1,20 @@
+title: Linux Shell Execution - Pattern _______________
+id: 83e61928-afad-4da3-b924-4427fef25db3
+status: stable
+description: Detects suspicious shell execution pattern matching known malware or reverse shell techniques
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'ruby.*TCPSocket'
+    condition: selection
+falsepositives:
+    - Legitimate automation scripts
+level: medium

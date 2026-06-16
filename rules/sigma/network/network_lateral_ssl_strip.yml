@@ -1,0 +1,20 @@
+title: Network Lateral - SSL Stripping Attack
+id: 45cfd57a-2079-4d2b-a36e-4d4d04a16ea8
+status: stable
+description: Detects SSL Stripping Attack network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1557.002
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

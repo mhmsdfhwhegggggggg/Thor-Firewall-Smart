@@ -1,0 +1,26 @@
+title: UAC Bypass via cleanmgr
+id: 2b938295-4ed8-400a-8852-8bcd3f6e030b
+status: stable
+description: Detects UAC bypass technique using cleanmgr auto-elevation
+author: Thor Security Team
+date: 2024/03/01
+modified: 2025/01/10
+tags:
+    - attack.privilege_escalation
+    - attack.defense_evasion
+    - attack.t1548.002
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\cleanmgr.exe'
+        ParentImage|endswith:
+            - '\cmd.exe'
+            - '\powershell.exe'
+    filter_expected:
+        ParentImage|contains: '\system32\'
+    condition: selection and not filter_expected
+falsepositives:
+    - Administrative tasks
+level: high

@@ -1,0 +1,22 @@
+title: Linux Privilege Escalation - Sudo Token Reuse
+id: bde9173f-5a55-42ed-8c90-bde4f149cbfb
+status: stable
+description: Detects Sudo Token Reuse privilege escalation technique
+author: Thor Security Team
+date: 2024/09/15
+modified: 2025/04/01
+tags:
+    - attack.privilege_escalation
+    - attack.t1548.003
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'sudo -n'
+            - 'sudo.*-e'
+    condition: selection
+falsepositives:
+    - System administrators performing legitimate maintenance
+level: high

@@ -1,0 +1,24 @@
+title: Windows Discovery Command - arp -a
+id: 5f0a9aa4-1835-4d21-a68f-e8db66596fca
+status: stable
+description: Detects use of 'arp -a' for system/network discovery
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/04/15
+tags:
+    - attack.discovery
+    - attack.t1082
+    - attack.t1016
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'arp -a'
+    filter_legitimate:
+        ParentImage|contains:
+            - '\explorer.exe'
+    condition: selection and not filter_legitimate
+falsepositives:
+    - System administrators running diagnostic commands
+level: low

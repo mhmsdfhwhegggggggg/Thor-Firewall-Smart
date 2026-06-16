@@ -1,0 +1,20 @@
+title: Azure Security - Azure Service Principal Created
+id: 6c4459f5-ee49-4b76-8168-984a0359ab99
+status: stable
+description: Detects Azure Service Principal Created in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1136.003
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'service_principal'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

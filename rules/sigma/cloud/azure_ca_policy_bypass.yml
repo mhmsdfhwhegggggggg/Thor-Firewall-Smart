@@ -1,0 +1,20 @@
+title: Azure Security - Azure Conditional Access Bypass
+id: 77c92b93-c1d8-4546-89c0-6aeec34d992c
+status: stable
+description: Detects Azure Conditional Access Bypass in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1556
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'ca_policy_bypass'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

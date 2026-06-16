@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Ransomware Mutex Creation
+id: d642e5af-e5ec-41cd-abeb-c0eb1e4ceb0f
+status: stable
+description: Detects Ransomware Mutex Creation behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'CreateMutex.*Global.*RANSOMWARE'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

@@ -1,0 +1,20 @@
+title: Linux Discovery - Cron Job Enumeration
+id: ffa0c2cc-87bc-403a-9335-9803a67ca0c1
+status: stable
+description: Detects Cron Job Enumeration on Linux systems
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/01
+tags:
+    - attack.discovery
+    - attack.t1053.003
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'crontab -l'
+    condition: selection
+falsepositives:
+    - System administrators performing audits
+level: low

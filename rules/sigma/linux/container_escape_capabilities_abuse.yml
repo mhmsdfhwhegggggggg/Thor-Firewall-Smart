@@ -1,0 +1,24 @@
+title: Container Escape - Linux Capabilities Abuse
+id: cdbbea2d-c629-4a7e-8554-6416cbbc3ea4
+status: stable
+description: Detects Linux Capabilities Abuse container escape technique
+author: Thor Security Team
+date: 2024/06/15
+modified: 2025/03/01
+tags:
+    - attack.privilege_escalation
+    - attack.lateral_movement
+    - attack.t1548
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'cap_sys_admin'
+            - 'cap_net_admin|capsh --print'
+    condition: selection
+falsepositives:
+    - Container administrators with legitimate privileged access
+    - Security testing environments
+level: critical

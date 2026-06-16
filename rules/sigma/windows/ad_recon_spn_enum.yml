@@ -1,0 +1,24 @@
+title: Active Directory - SPN Enumeration
+id: a47cf8ed-a2fa-4527-8aa2-3c687deaf2cb
+status: stable
+description: Detects SPN Enumeration against Active Directory infrastructure
+author: Thor Security Team
+date: 2024/07/01
+modified: 2025/02/28
+tags:
+    - attack.discovery
+    - attack.credential_access
+    - attack.t1558
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'setspn -Q'
+            - 'Get-NetUser -SPN'
+    condition: selection
+falsepositives:
+    - Authorized penetration testing
+    - IT security audits
+level: high

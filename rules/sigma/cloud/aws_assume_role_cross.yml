@@ -1,0 +1,22 @@
+title: AWS Security - Cross-Account AssumeRole
+id: 101517c1-51e6-45d7-8a93-cbbebf860802
+status: stable
+description: Detects Cross-Account AssumeRole in AWS CloudTrail logs
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.defense_evasion
+    - cloud
+    - attack.t1199
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: 'aws.amazonaws.com'
+    condition: selection
+falsepositives:
+    - Authorized cloud administrators
+    - Automated infrastructure management
+level: high

@@ -1,0 +1,20 @@
+title: GCP Security - GCP Cloud Function Abuse
+id: f57618f8-f5d3-45ff-80f6-7dade117f511
+status: stable
+description: Detects GCP Cloud Function Abuse in GCP Audit Logs
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/06/01
+tags:
+    - attack.cloud
+    - attack.t1578
+logsource:
+    product: gcp
+    service: gcp.audit
+detection:
+    selection:
+        protoPayload.methodName|contains: 'cloudfunc_abuse'
+    condition: selection
+falsepositives:
+    - Authorized GCP administrators
+level: high

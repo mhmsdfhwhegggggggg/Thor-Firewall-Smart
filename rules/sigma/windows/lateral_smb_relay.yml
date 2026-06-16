@@ -1,0 +1,22 @@
+title: Lateral Movement - SMB Relay Attack
+id: a82d1227-a212-476f-a358-ab6b753d6a2d
+status: stable
+description: Detects SMB Relay Attack lateral movement technique
+author: Thor Security Team
+date: 2024/08/15
+modified: 2025/01/20
+tags:
+    - attack.lateral_movement
+    - attack.t1557.001
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'responder'
+            - 'ntlmrelayx'
+    condition: selection
+falsepositives:
+    - Legitimate remote administration
+level: high

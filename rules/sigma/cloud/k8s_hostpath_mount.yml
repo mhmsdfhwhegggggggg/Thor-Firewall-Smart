@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s Dangerous HostPath Volume
+id: 5dc69f56-efb9-4e8e-a965-4b01d1c010f7
+status: stable
+description: Detects K8s Dangerous HostPath Volume in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1611
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

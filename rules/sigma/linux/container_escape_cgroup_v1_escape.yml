@@ -1,0 +1,24 @@
+title: Container Escape - cgroup v1 notify_on_release Escape
+id: b1f70bce-7bb5-4b04-966e-f9ebc7ec5c6f
+status: stable
+description: Detects cgroup v1 notify_on_release Escape container escape technique
+author: Thor Security Team
+date: 2024/06/15
+modified: 2025/03/01
+tags:
+    - attack.privilege_escalation
+    - attack.lateral_movement
+    - attack.t1611
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'notify_on_release'
+            - 'release_agent'
+    condition: selection
+falsepositives:
+    - Container administrators with legitimate privileged access
+    - Security testing environments
+level: critical

@@ -1,0 +1,26 @@
+title: LOLBAS Execution - msdeploy_exec
+id: db63f1ea-c8d0-49eb-8d1f-56e457ac0369
+status: stable
+description: Detects abuse of msdeploy_exec binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\msdeploy_exec.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

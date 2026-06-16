@@ -1,0 +1,21 @@
+title: Linux Persistence - SSHD Config Modification
+id: 993a2160-e09d-4fd0-8e01-529f4bb38b8e
+status: stable
+description: Detects SSHD Config Modification Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1098
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'PermitRootLogin yes'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

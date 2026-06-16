@@ -1,0 +1,21 @@
+title: Brute Force Attack - pop3_bruteforce
+id: 8f50ce68-1d7e-4e58-b7ad-066752794b68
+status: stable
+description: Detects brute force authentication attacks targeting pop3_bruteforce
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.credential_access
+    - attack.t1110.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        EventType: 'authentication_failure'
+        Count|gt: 10
+    condition: selection
+falsepositives:
+    - Password policy enforcement tools
+level: medium

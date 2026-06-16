@@ -1,0 +1,29 @@
+title: Advanced Network Threat Pattern 35
+id: da4a12c0-f1e9-4958-860b-1b997d9d5e59
+status: stable
+description: Detects advanced network threat pattern 35 based on behavioral analytics and threat intelligence feeds
+author: Thor Security Team
+date: 2025/04/01
+modified: 2025/06/15
+tags:
+    - attack.command_and_control
+    - attack.t1071
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection_beacon:
+        Initiated: 'true'
+        DestinationPort:
+            - 443
+            - 8443
+            - 4433
+    filter_known_good:
+        DestinationHostname|endswith:
+            - '.google.com'
+            - '.microsoft.com'
+            - '.cloudflare.com'
+    condition: selection_beacon and not filter_known_good
+falsepositives:
+    - Legitimate HTTPS connections
+level: low

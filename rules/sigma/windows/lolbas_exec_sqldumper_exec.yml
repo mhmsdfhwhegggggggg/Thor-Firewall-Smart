@@ -1,0 +1,26 @@
+title: LOLBAS Execution - sqldumper_exec
+id: 7369961d-c85d-40c6-9274-c1a7872c4e6b
+status: stable
+description: Detects abuse of sqldumper_exec binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\sqldumper_exec.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

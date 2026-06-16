@@ -1,0 +1,20 @@
+title: Tunneling/Proxy Detection - bore_tunnel
+id: 3101f4b5-510e-4117-8495-604d11f5a36b
+status: stable
+description: Detects suspicious tunneling or proxy usage via bore_tunnel
+author: Thor Security Team
+date: 2025/01/15
+modified: 2025/06/01
+tags:
+    - attack.command_and_control
+    - attack.t1090
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'bore_tunnel'
+    condition: selection
+falsepositives:
+    - VPN administrators
+level: medium

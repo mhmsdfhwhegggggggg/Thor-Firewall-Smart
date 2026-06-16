@@ -1,0 +1,22 @@
+title: Defense Evasion - Parent PID Spoofing
+id: 75403884-f347-433c-a196-de1ed44133d5
+status: stable
+description: Detects Parent PID Spoofing defense evasion technique on Windows
+author: Thor Security Team
+date: 2024/04/01
+modified: 2025/02/01
+tags:
+    - attack.defense_evasion
+    - attack.t1134.004
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'UpdateProcThreadAttribute'
+            - 'PROC_THREAD_ATTRIBUTE_PARENT'
+    condition: selection
+falsepositives:
+    - Security software testing
+level: high

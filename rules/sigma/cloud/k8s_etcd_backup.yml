@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s etcd Backup Access
+id: 94ccd636-dab9-407d-9d92-9403c53bebc4
+status: stable
+description: Detects K8s etcd Backup Access in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1552.007
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

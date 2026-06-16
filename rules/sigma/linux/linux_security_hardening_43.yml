@@ -1,0 +1,27 @@
+title: Linux Security Hardening Violation 43
+id: 35bcbe11-fb1b-404f-8ba2-9960a885de6b
+status: stable
+description: Detects violation of Linux security hardening baseline control 43 - CIS Benchmark Level 2 compliance check
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.defense_evasion
+    - attack.t1562
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection_disable_fw:
+        CommandLine|contains:
+            - 'iptables -F'
+            - 'ufw disable'
+            - 'systemctl stop firewalld'
+    selection_disable_audit:
+        CommandLine|contains:
+            - 'service auditd stop'
+            - 'systemctl disable auditd'
+    condition: 1 of selection_*
+falsepositives:
+    - Authorized system maintenance
+level: medium

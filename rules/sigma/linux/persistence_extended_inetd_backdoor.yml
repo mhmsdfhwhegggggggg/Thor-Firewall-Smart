@@ -1,0 +1,21 @@
+title: Linux Persistence - inetd Backdoor Service
+id: befa6ba0-b8fa-4a06-801d-2d9233222a36
+status: stable
+description: Detects inetd Backdoor Service Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1543.002
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '/etc/inetd.conf.*stream.*tcp.*nowait root'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

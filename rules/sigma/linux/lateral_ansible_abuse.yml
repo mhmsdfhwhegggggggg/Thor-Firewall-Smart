@@ -1,0 +1,20 @@
+title: Linux Lateral Movement - Ansible Abuse for Lateral Movement
+id: a485a7c2-2832-424c-bdfd-ae12554738be
+status: stable
+description: Detects Ansible Abuse for Lateral Movement lateral movement technique
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1072
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'ansible-playbook'
+    condition: selection
+falsepositives:
+    - Legitimate administrators
+level: medium

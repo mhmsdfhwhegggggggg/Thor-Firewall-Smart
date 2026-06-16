@@ -1,0 +1,21 @@
+title: Linux Persistence - Profile.d Script Backdoor
+id: a568e926-9fe2-4e78-bee2-4c3cd7065181
+status: stable
+description: Detects Profile.d Script Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1546.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '/etc/profile.d.*\.sh'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

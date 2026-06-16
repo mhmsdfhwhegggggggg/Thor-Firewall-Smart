@@ -1,0 +1,28 @@
+title: Network C2 - ICMP Covert C2 Channel
+id: cc7f5206-ab6a-4995-a030-189d27d7f9e0
+status: stable
+description: Detects ICMP Covert C2 Channel network communication
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.command_and_control
+    - attack.t1095
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 53
+            - 443
+            - 80
+            - 8080
+            - 8443
+        CommandLine|contains:
+            - 'icmp.*payload.*256'
+    condition: selection
+falsepositives:
+    - Legitimate network monitoring tools
+level: high

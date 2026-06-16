@@ -1,0 +1,24 @@
+title: Windows Discovery Command - ping -n 1
+id: f98a6daa-4161-4131-84d6-419c6f69edcb
+status: stable
+description: Detects use of 'ping -n 1' for system/network discovery
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/04/15
+tags:
+    - attack.discovery
+    - attack.t1082
+    - attack.t1016
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'ping -n 1'
+    filter_legitimate:
+        ParentImage|contains:
+            - '\explorer.exe'
+    condition: selection and not filter_legitimate
+falsepositives:
+    - System administrators running diagnostic commands
+level: low

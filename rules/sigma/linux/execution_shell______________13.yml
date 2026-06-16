@@ -1,0 +1,20 @@
+title: Linux Shell Execution - Pattern ____________
+id: 4b2ac2d9-df6f-4fe6-94b5-32c69790f411
+status: stable
+description: Detects suspicious shell execution pattern matching known malware or reverse shell techniques
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'telnet.*exec'
+    condition: selection
+falsepositives:
+    - Legitimate automation scripts
+level: medium

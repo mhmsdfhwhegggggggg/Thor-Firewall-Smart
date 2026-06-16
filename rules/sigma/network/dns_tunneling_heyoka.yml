@@ -1,0 +1,28 @@
+title: Network C2 - DNS Tunneling via Heyoka
+id: 16045843-ad05-472e-875e-77a2daffd666
+status: stable
+description: Detects DNS Tunneling via Heyoka network communication
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.command_and_control
+    - attack.t1071.004
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 53
+            - 443
+            - 80
+            - 8080
+            - 8443
+        CommandLine|contains:
+            - 'heyoka'
+    condition: selection
+falsepositives:
+    - Legitimate network monitoring tools
+level: high

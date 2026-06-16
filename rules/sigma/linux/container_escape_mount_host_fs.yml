@@ -1,0 +1,24 @@
+title: Container Escape - Host Filesystem Mount Attack
+id: 37d0048a-3526-4631-91f2-41b51135392d
+status: stable
+description: Detects Host Filesystem Mount Attack container escape technique
+author: Thor Security Team
+date: 2024/06/15
+modified: 2025/03/01
+tags:
+    - attack.privilege_escalation
+    - attack.lateral_movement
+    - attack.t1611
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'mount.*hostPath'
+            - '/host/etc/crontab'
+    condition: selection
+falsepositives:
+    - Container administrators with legitimate privileged access
+    - Security testing environments
+level: critical

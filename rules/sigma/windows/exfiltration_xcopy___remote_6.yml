@@ -1,0 +1,21 @@
+title: Data Exfiltration Method - xcopy___remote
+id: a66a9dc1-0566-49c3-8933-bb0d403cd261
+status: stable
+description: Detects potential data exfiltration using Windows built-in tools
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/05/01
+tags:
+    - attack.exfiltration
+    - attack.t1048
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'xcopy.*\\remote'
+    condition: selection
+falsepositives:
+    - Legitimate file transfer operations
+    - Backup jobs
+level: medium

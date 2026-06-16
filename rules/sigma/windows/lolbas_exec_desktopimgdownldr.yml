@@ -1,0 +1,26 @@
+title: LOLBAS Execution - desktopimgdownldr
+id: 47700f41-16ed-4a05-9168-9471ec9531ef
+status: stable
+description: Detects abuse of desktopimgdownldr binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\desktopimgdownldr.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

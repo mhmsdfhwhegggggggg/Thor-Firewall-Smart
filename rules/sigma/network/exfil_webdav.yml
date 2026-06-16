@@ -1,0 +1,22 @@
+title: Network Exfiltration - WebDAV Exfiltration
+id: 959a98dc-902b-4620-b580-4de243c7f1c8
+status: stable
+description: Detects WebDAV Exfiltration data exfiltration over network
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/05/15
+tags:
+    - attack.exfiltration
+    - attack.t1048.002
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        BytesSent|gt: 10000000
+    condition: selection
+falsepositives:
+    - Legitimate large file transfers
+    - Backup operations
+level: medium

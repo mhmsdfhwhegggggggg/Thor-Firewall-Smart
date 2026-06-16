@@ -1,0 +1,30 @@
+title: LOLBAS Abuse via findstr
+id: 772908d9-8412-43f8-a551-6b9e7e683f4b
+status: stable
+description: Detects abuse of legitimate Windows binary findstr for malicious purposes (Living off the Land)
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/02/10
+tags:
+    - attack.defense_evasion
+    - attack.execution
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\findstr.exe'
+        CommandLine|contains:
+            - 'http'
+            - 'ftp'
+            - '/e:javascript'
+            - 'scrobj'
+    filter:
+        ParentImage|contains:
+            - '\explorer.exe'
+            - '\services.exe'
+    condition: selection and not filter
+falsepositives:
+    - Legitimate administrative use
+level: medium

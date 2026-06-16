@@ -1,0 +1,20 @@
+title: GCP Security - GCP Org Policy Constraint Disabled
+id: 1dcbb4b9-aba6-45cf-b5ea-8a87b34318ee
+status: stable
+description: Detects GCP Org Policy Constraint Disabled in GCP Audit Logs
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/06/01
+tags:
+    - attack.cloud
+    - attack.t1562
+logsource:
+    product: gcp
+    service: gcp.audit
+detection:
+    selection:
+        protoPayload.methodName|contains: 'org_policy_disable'
+    condition: selection
+falsepositives:
+    - Authorized GCP administrators
+level: high

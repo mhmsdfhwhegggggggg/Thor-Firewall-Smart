@@ -1,0 +1,30 @@
+title: LOLBAS Abuse via extrac32
+id: d0addf82-d817-4cf6-ad62-f4d89e758238
+status: stable
+description: Detects abuse of legitimate Windows binary extrac32 for malicious purposes (Living off the Land)
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/02/10
+tags:
+    - attack.defense_evasion
+    - attack.execution
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\extrac32.exe'
+        CommandLine|contains:
+            - 'http'
+            - 'ftp'
+            - '/e:javascript'
+            - 'scrobj'
+    filter:
+        ParentImage|contains:
+            - '\explorer.exe'
+            - '\services.exe'
+    condition: selection and not filter
+falsepositives:
+    - Legitimate administrative use
+level: medium

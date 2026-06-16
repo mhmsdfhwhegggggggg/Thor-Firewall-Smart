@@ -1,0 +1,21 @@
+title: Windows Persistence - Screensaver Persistence
+id: f05aca8c-be3e-4a26-9723-3939df694610
+status: stable
+description: Detects Screensaver Persistence persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1546.002
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - '\.scr.*scrnsave'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

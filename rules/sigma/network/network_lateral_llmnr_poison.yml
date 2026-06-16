@@ -1,0 +1,20 @@
+title: Network Lateral - LLMNR Poisoning
+id: 15debeb7-e3c9-427b-9dab-ca801eeda0bd
+status: stable
+description: Detects LLMNR Poisoning network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1557.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

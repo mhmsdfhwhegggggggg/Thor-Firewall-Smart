@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Double Extortion Pre-Encryption Exfiltration
+id: cf5b6312-a67a-4f2a-ba23-692969c7195f
+status: stable
+description: Detects Double Extortion Pre-Encryption Exfiltration behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1537
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'rclone.*copy.*mega'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

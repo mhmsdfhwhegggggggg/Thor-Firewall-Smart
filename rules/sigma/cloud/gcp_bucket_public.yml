@@ -1,0 +1,20 @@
+title: GCP Security - GCP Storage Bucket Made Public
+id: 64d8d4b6-3411-449d-bcf7-24a93fa715dd
+status: stable
+description: Detects GCP Storage Bucket Made Public in GCP Audit Logs
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/06/01
+tags:
+    - attack.cloud
+    - attack.t1530
+logsource:
+    product: gcp
+    service: gcp.audit
+detection:
+    selection:
+        protoPayload.methodName|contains: 'bucket_public'
+    condition: selection
+falsepositives:
+    - Authorized GCP administrators
+level: high

@@ -1,0 +1,22 @@
+title: Network Exfiltration - Large HTTP POST Exfiltration
+id: 2b8d07c6-b635-4137-8bdf-81d0e1dec8e9
+status: stable
+description: Detects Large HTTP POST Exfiltration data exfiltration over network
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/05/15
+tags:
+    - attack.exfiltration
+    - attack.t1048.002
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        BytesSent|gt: 10000000
+    condition: selection
+falsepositives:
+    - Legitimate large file transfers
+    - Backup operations
+level: medium

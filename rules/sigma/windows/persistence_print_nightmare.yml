@@ -1,0 +1,21 @@
+title: Windows Persistence - PrintNightmare Exploitation
+id: c8d035c3-b906-46c3-ad3e-0e4d5870378c
+status: stable
+description: Detects PrintNightmare Exploitation persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1204
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'spoolsv.*DLL'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

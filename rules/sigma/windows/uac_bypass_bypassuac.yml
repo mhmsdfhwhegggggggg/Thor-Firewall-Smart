@@ -1,0 +1,26 @@
+title: UAC Bypass via bypassuac
+id: 5bf85346-67c0-4658-867a-07537d74131c
+status: stable
+description: Detects UAC bypass technique using bypassuac auto-elevation
+author: Thor Security Team
+date: 2024/03/01
+modified: 2025/01/10
+tags:
+    - attack.privilege_escalation
+    - attack.defense_evasion
+    - attack.t1548.002
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\bypassuac.exe'
+        ParentImage|endswith:
+            - '\cmd.exe'
+            - '\powershell.exe'
+    filter_expected:
+        ParentImage|contains: '\system32\'
+    condition: selection and not filter_expected
+falsepositives:
+    - Administrative tasks
+level: high

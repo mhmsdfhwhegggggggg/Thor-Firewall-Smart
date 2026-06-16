@@ -1,0 +1,30 @@
+title: LOLBAS Abuse via dfsvc
+id: 1eb44896-3f17-495a-9f18-0cd6ee1f39a1
+status: stable
+description: Detects abuse of legitimate Windows binary dfsvc for malicious purposes (Living off the Land)
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/02/10
+tags:
+    - attack.defense_evasion
+    - attack.execution
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\dfsvc.exe'
+        CommandLine|contains:
+            - 'http'
+            - 'ftp'
+            - '/e:javascript'
+            - 'scrobj'
+    filter:
+        ParentImage|contains:
+            - '\explorer.exe'
+            - '\services.exe'
+    condition: selection and not filter
+falsepositives:
+    - Legitimate administrative use
+level: medium

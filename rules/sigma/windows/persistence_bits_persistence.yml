@@ -1,0 +1,21 @@
+title: Windows Persistence - BITS Job Persistence
+id: 395386ab-0f91-4a36-8390-0998510ed802
+status: stable
+description: Detects BITS Job Persistence persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1197
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'BITSAdmin /SetNotifyCmdLine'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

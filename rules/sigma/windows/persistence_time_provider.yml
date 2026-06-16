@@ -1,0 +1,21 @@
+title: Windows Persistence - Time Provider DLL Hijack
+id: dc015246-3a2a-47a6-81ab-b22c0f61daee
+status: stable
+description: Detects Time Provider DLL Hijack persistence mechanism
+author: Thor Security Team
+date: 2024/05/01
+modified: 2025/03/15
+tags:
+    - attack.persistence
+    - attack.t1547.003
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'W32Time.*DllName'
+    condition: selection
+falsepositives:
+    - Legitimate system configuration
+level: high

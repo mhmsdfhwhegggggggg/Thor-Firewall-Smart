@@ -1,0 +1,20 @@
+title: Linux Lateral Movement - RSync Lateral Movement
+id: 1d86230f-6f02-4e14-a3c2-6216c41350e9
+status: stable
+description: Detects RSync Lateral Movement lateral movement technique
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1105
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'rsync -avz'
+    condition: selection
+falsepositives:
+    - Legitimate administrators
+level: medium

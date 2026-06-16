@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Rapid Mass File Encryption
+id: ca7417ce-1982-455e-afd1-275f96dd9bdf
+status: stable
+description: Detects Rapid Mass File Encryption behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'FileEncryption.*rate.*high'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

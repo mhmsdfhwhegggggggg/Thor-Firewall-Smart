@@ -1,0 +1,29 @@
+title: Network Threat Intelligence Pattern 4
+id: f666c084-e08f-4d3f-a531-14d11d386ef1
+status: stable
+description: Detects network communication matching threat intelligence pattern 4 including known malicious IPs, DGA domains, and C2 protocols
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.command_and_control
+    - attack.t1071.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        DestinationPort:
+            - 1337
+            - 31337
+            - 4444
+            - 5555
+            - 6666
+            - 7777
+            - 8888
+            - 9999
+    condition: selection
+falsepositives:
+    - Development environments using non-standard ports
+level: medium

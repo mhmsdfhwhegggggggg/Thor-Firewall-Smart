@@ -1,0 +1,20 @@
+title: GCP Security - GCP Project Audit Logging Disabled
+id: f0fad4df-3e34-482a-9edc-ef218713b8ba
+status: stable
+description: Detects GCP Project Audit Logging Disabled in GCP Audit Logs
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/06/01
+tags:
+    - attack.cloud
+    - attack.t1562
+logsource:
+    product: gcp
+    service: gcp.audit
+detection:
+    selection:
+        protoPayload.methodName|contains: 'project_audit_disable'
+    condition: selection
+falsepositives:
+    - Authorized GCP administrators
+level: high

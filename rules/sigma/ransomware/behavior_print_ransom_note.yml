@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Print Ransom Note to All Printers
+id: de3acb53-eae1-4711-98c2-fa522bfa9c2c
+status: stable
+description: Detects Print Ransom Note to All Printers behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1491
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'print.*ransom_note\.txt'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

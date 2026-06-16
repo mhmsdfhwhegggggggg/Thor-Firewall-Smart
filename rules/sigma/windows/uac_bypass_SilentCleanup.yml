@@ -1,0 +1,26 @@
+title: UAC Bypass via SilentCleanup
+id: 0a8550af-fd6f-43dc-9802-bf92c0003c13
+status: stable
+description: Detects UAC bypass technique using SilentCleanup auto-elevation
+author: Thor Security Team
+date: 2024/03/01
+modified: 2025/01/10
+tags:
+    - attack.privilege_escalation
+    - attack.defense_evasion
+    - attack.t1548.002
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\SilentCleanup.exe'
+        ParentImage|endswith:
+            - '\cmd.exe'
+            - '\powershell.exe'
+    filter_expected:
+        ParentImage|contains: '\system32\'
+    condition: selection and not filter_expected
+falsepositives:
+    - Administrative tasks
+level: high

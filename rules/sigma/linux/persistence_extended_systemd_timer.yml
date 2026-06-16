@@ -1,0 +1,21 @@
+title: Linux Persistence - Systemd Timer Persistence
+id: dc666ba5-77b4-4edf-bab9-0557cf634743
+status: stable
+description: Detects Systemd Timer Persistence Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1053.006
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'systemctl.*enable.*timer'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

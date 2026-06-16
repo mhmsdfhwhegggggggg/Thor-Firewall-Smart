@@ -1,0 +1,20 @@
+title: Azure Security - Azure Logic App Abuse
+id: 3103397b-d1b9-4744-8ff5-f07671bcc6d4
+status: stable
+description: Detects Azure Logic App Abuse in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1651
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'logic_app_abuse'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

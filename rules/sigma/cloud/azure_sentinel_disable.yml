@@ -1,0 +1,20 @@
+title: Azure Security - Azure Sentinel Disabled
+id: 6855d9a5-e42f-4d50-819e-c8d9b84947c5
+status: stable
+description: Detects Azure Sentinel Disabled in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1562
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'sentinel_disable'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

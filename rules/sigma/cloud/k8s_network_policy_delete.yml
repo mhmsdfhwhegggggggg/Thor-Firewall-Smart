@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s NetworkPolicy Deletion
+id: 89c2f61d-93b8-44a8-af32-4af170bbc64d
+status: stable
+description: Detects K8s NetworkPolicy Deletion in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1562
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

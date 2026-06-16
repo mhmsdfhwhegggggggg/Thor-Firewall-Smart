@@ -1,0 +1,24 @@
+title: Windows Discovery Command - tracert
+id: b2418d2c-40ad-4764-8cc8-80e15c0c0dd1
+status: stable
+description: Detects use of 'tracert' for system/network discovery
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/04/15
+tags:
+    - attack.discovery
+    - attack.t1082
+    - attack.t1016
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains: 'tracert'
+    filter_legitimate:
+        ParentImage|contains:
+            - '\explorer.exe'
+    condition: selection and not filter_legitimate
+falsepositives:
+    - System administrators running diagnostic commands
+level: low

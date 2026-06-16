@@ -1,0 +1,20 @@
+title: Linux Lateral Movement - SSH Copy-ID Abuse
+id: 0b91a1b7-50a8-45f1-95f7-08da0d4bcac6
+status: stable
+description: Detects SSH Copy-ID Abuse lateral movement technique
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1098.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'ssh-copy-id'
+    condition: selection
+falsepositives:
+    - Legitimate administrators
+level: medium

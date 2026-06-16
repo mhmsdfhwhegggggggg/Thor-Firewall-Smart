@@ -1,0 +1,20 @@
+title: Network Port Scan - traceroute_scan
+id: e41bc620-bf7f-4a13-a1bb-16dd5f6c3fb2
+status: stable
+description: Detects traceroute_scan network reconnaissance technique
+author: Thor Security Team
+date: 2024/10/15
+modified: 2025/04/01
+tags:
+    - attack.discovery
+    - attack.t1046
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'nmap'
+    condition: selection
+falsepositives:
+    - Authorized network scanning by security team
+level: medium

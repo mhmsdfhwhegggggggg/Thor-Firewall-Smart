@@ -1,0 +1,20 @@
+title: Azure Security - Azure PIM Role Elevation
+id: 9ab31fb9-b460-44d4-a08f-2c781ee29d06
+status: stable
+description: Detects Azure PIM Role Elevation in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1078.004
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'pim_elevation'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

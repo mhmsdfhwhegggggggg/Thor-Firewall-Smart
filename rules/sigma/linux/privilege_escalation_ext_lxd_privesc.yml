@@ -1,0 +1,22 @@
+title: Linux Privilege Escalation - LXD/LXC Privilege Escalation
+id: 8c367614-5e0d-436f-b4c5-ba9588d20f15
+status: stable
+description: Detects LXD/LXC Privilege Escalation privilege escalation technique
+author: Thor Security Team
+date: 2024/09/15
+modified: 2025/04/01
+tags:
+    - attack.privilege_escalation
+    - attack.t1611
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'lxc launch.*-p privileged'
+            - 'lxd init'
+    condition: selection
+falsepositives:
+    - System administrators performing legitimate maintenance
+level: high

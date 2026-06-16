@@ -1,0 +1,20 @@
+title: Network Lateral - Internal SMB Scanning
+id: 18f31aea-4b43-473e-97f1-5081ef413226
+status: stable
+description: Detects Internal SMB Scanning network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1021.002
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

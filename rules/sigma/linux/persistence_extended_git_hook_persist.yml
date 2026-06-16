@@ -1,0 +1,21 @@
+title: Linux Persistence - Git Hook Backdoor
+id: 4831c030-6935-4c92-b2f7-734c59369e0b
+status: stable
+description: Detects Git Hook Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1546
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - '.git/hooks/post-commit'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

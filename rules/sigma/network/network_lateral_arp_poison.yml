@@ -1,0 +1,20 @@
+title: Network Lateral - ARP Cache Poisoning
+id: aa14d87f-e675-4716-9928-653c4283a6e6
+status: stable
+description: Detects ARP Cache Poisoning network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1557.002
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

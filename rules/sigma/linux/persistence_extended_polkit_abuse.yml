@@ -1,0 +1,21 @@
+title: Linux Persistence - Polkit Privilege Escalation
+id: 753a3fa7-8dc9-43c2-bb77-5d4072451fd4
+status: stable
+description: Detects Polkit Privilege Escalation Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1548
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'pkexec.*--user root'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

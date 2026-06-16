@@ -1,0 +1,26 @@
+title: Kerberos Attack Variant 14
+id: 5fcfe501-17d1-44ba-8acd-f0804d3065c8
+status: stable
+description: Detects Kerberos-based attack technique variant 14 including ticket manipulation and SPN enumeration
+author: Thor Security Team
+date: 2024/06/01
+modified: 2025/01/15
+tags:
+    - attack.credential_access
+    - attack.t1558.003
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'kerberoast'
+            - '-ServiceName'
+            - 'Get-NetUser -SPN'
+            - 'Invoke-Kerberoast'
+            - 'Request-SPNTicket'
+            - 'Add-Type -AssemblyName System.IdentityModel'
+    condition: selection
+falsepositives:
+    - Legitimate AD management scripts by domain admins
+level: high

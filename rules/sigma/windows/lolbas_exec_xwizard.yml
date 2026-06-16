@@ -1,0 +1,26 @@
+title: LOLBAS Execution - xwizard
+id: dcea5c0d-6190-4ef4-97ab-f92254154cbd
+status: stable
+description: Detects abuse of xwizard binary for code execution
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.defense_evasion
+    - attack.t1218
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        Image|endswith: '\xwizard.exe'
+        CommandLine|contains:
+            - 'http'
+            - '/e:'
+            - 'calc'
+            - '-f '
+    condition: selection
+falsepositives:
+    - Legitimate administrative use
+level: medium

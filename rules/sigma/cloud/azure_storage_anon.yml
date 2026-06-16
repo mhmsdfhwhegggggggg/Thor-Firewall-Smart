@@ -1,0 +1,20 @@
+title: Azure Security - Azure Storage Anonymous Access
+id: e35eba82-264a-4130-8fe0-2732a0a847f5
+status: stable
+description: Detects Azure Storage Anonymous Access in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1530
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'storage_anon'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

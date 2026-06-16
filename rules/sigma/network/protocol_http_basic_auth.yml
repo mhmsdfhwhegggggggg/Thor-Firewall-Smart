@@ -1,0 +1,20 @@
+title: Cleartext Protocol / Amplification - http_basic_auth
+id: 1808cd2d-dcb6-4fda-8424-4dd374e07954
+status: stable
+description: Detects insecure or abused protocol usage: http_basic_auth
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/03/10
+tags:
+    - attack.initial_access
+    - attack.t1190
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Protocol: 'tcp'
+    condition: selection
+falsepositives:
+    - Legacy systems requiring old protocols
+level: low

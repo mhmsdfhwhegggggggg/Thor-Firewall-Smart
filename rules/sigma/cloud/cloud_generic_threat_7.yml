@@ -1,0 +1,21 @@
+title: Cloud Generic Threat Pattern 7
+id: ccecfa93-632a-4f46-8878-e4ead63c2711
+status: stable
+description: Detects cloud environment threat pattern 7 involving unauthorized access or configuration changes
+author: Thor Security Team
+date: 2025/04/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.t1078.004
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        errorCode: 'AccessDenied'
+        userAgent|contains: 'python-requests'
+    condition: selection
+falsepositives:
+    - Misconfigured applications
+level: medium

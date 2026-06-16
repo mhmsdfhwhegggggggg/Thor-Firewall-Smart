@@ -1,0 +1,20 @@
+title: Linux Shell Execution - Pattern _________
+id: e7291152-0d5e-4c81-834b-85a97bd410b9
+status: stable
+description: Detects suspicious shell execution pattern matching known malware or reverse shell techniques
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.execution
+    - attack.t1059.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'ncat --exec'
+    condition: selection
+falsepositives:
+    - Legitimate automation scripts
+level: medium

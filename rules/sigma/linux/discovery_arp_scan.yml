@@ -1,0 +1,20 @@
+title: Linux Discovery - ARP Network Discovery
+id: 1ad017e9-9628-4ab5-a629-42e3350c577d
+status: stable
+description: Detects ARP Network Discovery on Linux systems
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/01
+tags:
+    - attack.discovery
+    - attack.t1018
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'arp-scan'
+    condition: selection
+falsepositives:
+    - System administrators performing audits
+level: low

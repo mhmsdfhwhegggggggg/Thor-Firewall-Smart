@@ -1,0 +1,22 @@
+title: AWS Security - AWS GuardDuty Disabled
+id: 8d257bb3-1868-4551-b1e4-b73a03e866bc
+status: stable
+description: Detects AWS GuardDuty Disabled in AWS CloudTrail logs
+author: Thor Security Team
+date: 2024/09/01
+modified: 2025/05/01
+tags:
+    - attack.defense_evasion
+    - cloud
+    - attack.t1562
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventSource: 'aws.amazonaws.com'
+    condition: selection
+falsepositives:
+    - Authorized cloud administrators
+    - Automated infrastructure management
+level: high

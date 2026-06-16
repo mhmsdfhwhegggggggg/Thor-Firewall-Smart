@@ -1,0 +1,22 @@
+title: Defense Evasion - Process Doppelgänging
+id: e1128cde-b13a-4436-b152-1c8ec9d49cb7
+status: stable
+description: Detects Process Doppelgänging defense evasion technique on Windows
+author: Thor Security Team
+date: 2024/04/01
+modified: 2025/02/01
+tags:
+    - attack.defense_evasion
+    - attack.t1055.013
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'NtCreateTransaction'
+            - 'RtlSetCurrentTransaction'
+    condition: selection
+falsepositives:
+    - Security software testing
+level: high

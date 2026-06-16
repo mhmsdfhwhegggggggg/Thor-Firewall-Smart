@@ -1,0 +1,21 @@
+title: Linux Persistence - Sudo Plugin Backdoor
+id: d7162e39-52a4-4655-bb6c-8492443e0875
+status: stable
+description: Detects Sudo Plugin Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1548.003
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'sudoers.*NOPASSWD.*ALL'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

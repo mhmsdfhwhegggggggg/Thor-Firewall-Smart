@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s LoadBalancer to 0.0.0.0
+id: 944760fb-2163-4d5d-b504-ab370c63c3f7
+status: stable
+description: Detects K8s LoadBalancer to 0.0.0.0 in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1133
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

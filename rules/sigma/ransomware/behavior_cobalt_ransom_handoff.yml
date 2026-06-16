@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Cobalt Strike to Ransomware Handoff
+id: 56d6fa34-88a3-440c-8a44-2ab3f0757f8e
+status: stable
+description: Detects Cobalt Strike to Ransomware Handoff behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1059
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'beacon.*LoadLibrary.*ransom'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

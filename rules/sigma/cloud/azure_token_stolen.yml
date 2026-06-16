@@ -1,0 +1,20 @@
+title: Azure Security - Azure Access Token Theft
+id: 298688b8-461e-4979-96e7-7f177f9b054f
+status: stable
+description: Detects Azure Access Token Theft in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1528
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'token_stolen'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

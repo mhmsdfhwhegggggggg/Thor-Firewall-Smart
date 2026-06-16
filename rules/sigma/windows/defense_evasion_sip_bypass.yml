@@ -1,0 +1,22 @@
+title: Defense Evasion - SIP/Trust Provider Hijacking
+id: 4b1296a2-90db-4931-943c-105afdf20c21
+status: stable
+description: Detects SIP/Trust Provider Hijacking defense evasion technique on Windows
+author: Thor Security Team
+date: 2024/04/01
+modified: 2025/02/01
+tags:
+    - attack.defense_evasion
+    - attack.t1553.003
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'CryptSIPDllVerifyIndirectData'
+            - 'WinVerifyTrust'
+    condition: selection
+falsepositives:
+    - Security software testing
+level: high

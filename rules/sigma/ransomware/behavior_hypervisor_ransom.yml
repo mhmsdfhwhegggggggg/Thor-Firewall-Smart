@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Hypervisor-Level Ransomware (ESXi)
+id: bc6ac44f-33ce-4022-883f-23d4d689d427
+status: stable
+description: Detects Hypervisor-Level Ransomware (ESXi) behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'esxcli vm process kill'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

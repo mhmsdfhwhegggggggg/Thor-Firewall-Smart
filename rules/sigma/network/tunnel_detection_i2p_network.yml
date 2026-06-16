@@ -1,0 +1,20 @@
+title: Tunneling/Proxy Detection - i2p_network
+id: e9478455-b12b-427e-9169-4503971fb82d
+status: stable
+description: Detects suspicious tunneling or proxy usage via i2p_network
+author: Thor Security Team
+date: 2025/01/15
+modified: 2025/06/01
+tags:
+    - attack.command_and_control
+    - attack.t1090
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        CommandLine|contains: 'i2p_network'
+    condition: selection
+falsepositives:
+    - VPN administrators
+level: medium

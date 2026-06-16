@@ -1,0 +1,20 @@
+title: Cleartext Protocol / Amplification - ssdp_amplify
+id: 339e1433-f685-4078-9e29-b162ce08d577
+status: stable
+description: Detects insecure or abused protocol usage: ssdp_amplify
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/03/10
+tags:
+    - attack.initial_access
+    - attack.t1190
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Protocol: 'tcp'
+    condition: selection
+falsepositives:
+    - Legacy systems requiring old protocols
+level: low

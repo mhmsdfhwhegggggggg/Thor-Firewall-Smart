@@ -1,0 +1,22 @@
+title: Kubernetes Security - K8s NodePort Service Exposed
+id: 63859101-5f21-49f3-b06f-2ebfaebf2ce2
+status: stable
+description: Detects K8s NodePort Service Exposed in Kubernetes audit logs
+author: Thor Security Team
+date: 2024/12/01
+modified: 2025/06/15
+tags:
+    - attack.cloud
+    - attack.containers
+    - attack.t1133
+logsource:
+    product: kubernetes
+    service: audit
+detection:
+    selection:
+        objectRef.resource: 'pods'
+        verb: 'create'
+    condition: selection
+falsepositives:
+    - Authorized Kubernetes administrators
+level: high

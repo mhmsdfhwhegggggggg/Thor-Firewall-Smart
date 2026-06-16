@@ -1,0 +1,20 @@
+title: Azure Security - Azure Function App Abuse
+id: cf46e7ba-799b-4922-9da4-62803907152f
+status: stable
+description: Detects Azure Function App Abuse in Azure Activity Logs
+author: Thor Security Team
+date: 2024/10/01
+modified: 2025/05/15
+tags:
+    - attack.cloud
+    - attack.t1578
+logsource:
+    product: azure
+    service: activitylogs
+detection:
+    selection:
+        operationName|contains: 'function_abuse'
+    condition: selection
+falsepositives:
+    - Authorized cloud operations
+level: high

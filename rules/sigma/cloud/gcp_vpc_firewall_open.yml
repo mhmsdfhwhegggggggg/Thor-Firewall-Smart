@@ -1,0 +1,20 @@
+title: GCP Security - GCP VPC Firewall Rule Open to 0.0.0.0/0
+id: c103d02b-10c7-41b9-9d03-e134ca275501
+status: stable
+description: Detects GCP VPC Firewall Rule Open to 0.0.0.0/0 in GCP Audit Logs
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/06/01
+tags:
+    - attack.cloud
+    - attack.t1562
+logsource:
+    product: gcp
+    service: gcp.audit
+detection:
+    selection:
+        protoPayload.methodName|contains: 'vpc_firewall_open'
+    condition: selection
+falsepositives:
+    - Authorized GCP administrators
+level: high

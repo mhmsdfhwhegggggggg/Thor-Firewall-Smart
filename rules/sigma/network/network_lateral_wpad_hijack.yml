@@ -1,0 +1,20 @@
+title: Network Lateral - WPAD Proxy Hijacking
+id: f03a890b-892e-46be-a6f7-bbdf0b1072d8
+status: stable
+description: Detects WPAD Proxy Hijacking network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1557.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high

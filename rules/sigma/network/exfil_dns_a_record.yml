@@ -1,0 +1,22 @@
+title: Network Exfiltration - DNS A Record Exfiltration
+id: 933deaa3-9bb4-48fd-96e4-04f76d4fbcf8
+status: stable
+description: Detects DNS A Record Exfiltration data exfiltration over network
+author: Thor Security Team
+date: 2024/11/01
+modified: 2025/05/15
+tags:
+    - attack.exfiltration
+    - attack.t1048.003
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+        BytesSent|gt: 10000000
+    condition: selection
+falsepositives:
+    - Legitimate large file transfers
+    - Backup operations
+level: medium

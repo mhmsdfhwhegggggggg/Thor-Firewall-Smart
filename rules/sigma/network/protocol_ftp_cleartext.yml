@@ -1,0 +1,20 @@
+title: Cleartext Protocol / Amplification - ftp_cleartext
+id: 84d74814-9d04-4887-a4a2-8cda3592efed
+status: stable
+description: Detects insecure or abused protocol usage: ftp_cleartext
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/03/10
+tags:
+    - attack.initial_access
+    - attack.t1190
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Protocol: 'tcp'
+    condition: selection
+falsepositives:
+    - Legacy systems requiring old protocols
+level: low

@@ -1,0 +1,23 @@
+title: Generic Ransomware Indicator 3
+id: 134e6bbe-1578-4217-afe9-be6d925596aa
+status: stable
+description: Detects generic ransomware behavior indicator 3
+author: Thor Security Team
+date: 2025/05/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'encrypt'
+            - '.locked'
+            - 'ransom'
+    condition: selection
+falsepositives:
+    - Legitimate encryption software
+level: high

@@ -1,0 +1,31 @@
+title: Cuba Ransomware Detection
+id: c9a7010c-d39e-43a3-8988-5adc3dc5d7b5
+status: stable
+description: Detects behavioral indicators of Cuba ransomware including encryption patterns, ransom note creation, and shadow copy deletion
+author: Thor Security Team
+date: 2025/01/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+    - attack.t1490
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_shadow:
+        CommandLine|contains:
+            - 'vssadmin delete shadows'
+            - 'wmic shadowcopy delete'
+            - 'bcdedit /set recoveryenabled No'
+            - 'wbadmin delete catalog'
+    selection_extension:
+        TargetFilename|endswith:
+            - '.cuba'
+            - '.encrypted'
+            - '.locked'
+    condition: 1 of selection_*
+falsepositives:
+    - Disk cleanup tools
+    - Backup management software
+level: critical

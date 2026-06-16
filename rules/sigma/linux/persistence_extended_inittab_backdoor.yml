@@ -1,0 +1,21 @@
+title: Linux Persistence - /etc/inittab Backdoor
+id: 1bf8f2d7-6f86-4318-89de-45bd59997089
+status: stable
+description: Detects /etc/inittab Backdoor Linux persistence mechanism
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/01/30
+tags:
+    - attack.persistence
+    - attack.t1037.004
+logsource:
+    category: process_creation
+    product: linux
+detection:
+    selection:
+        CommandLine|contains:
+            - 'inittab.*respawn'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+level: high

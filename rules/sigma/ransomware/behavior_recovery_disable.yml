@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Windows Recovery Disabled
+id: fa2cdb4e-c054-49d9-ac4b-d56cd17ceda8
+status: stable
+description: Detects Windows Recovery Disabled behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1490
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'bcdedit.*recoveryenabled.*no'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

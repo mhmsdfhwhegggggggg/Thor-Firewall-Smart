@@ -1,0 +1,20 @@
+title: Cleartext Protocol / Amplification - telnet_unencrypted
+id: 24627971-3038-4001-9fc1-d3bc7c9d94de
+status: stable
+description: Detects insecure or abused protocol usage: telnet_unencrypted
+author: Thor Security Team
+date: 2024/08/01
+modified: 2025/03/10
+tags:
+    - attack.initial_access
+    - attack.t1190
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Protocol: 'tcp'
+    condition: selection
+falsepositives:
+    - Legacy systems requiring old protocols
+level: low

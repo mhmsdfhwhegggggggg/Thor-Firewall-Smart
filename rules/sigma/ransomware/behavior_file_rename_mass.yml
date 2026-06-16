@@ -1,0 +1,22 @@
+title: Ransomware Behavior - Mass File Renaming Pattern
+id: aa3ed3a3-22de-4bdb-b5dc-6a2957fb86ee
+status: stable
+description: Detects Mass File Renaming Pattern behavioral indicator of ransomware activity
+author: Thor Security Team
+date: 2025/02/01
+modified: 2025/06/15
+tags:
+    - attack.impact
+    - attack.t1486
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection:
+        CommandLine|contains:
+            - 'ren.*\.docx.*\.encrypted'
+    condition: selection
+falsepositives:
+    - Legitimate disk management operations
+    - Security testing exercises
+level: critical

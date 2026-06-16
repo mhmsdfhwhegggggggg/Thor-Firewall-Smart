@@ -1,0 +1,20 @@
+title: Network Lateral - NBNS Poisoning
+id: 8ac6692b-244b-4ad1-bdff-7f0c0a6fdc7c
+status: stable
+description: Detects NBNS Poisoning network attack
+author: Thor Security Team
+date: 2025/03/01
+modified: 2025/06/15
+tags:
+    - attack.lateral_movement
+    - attack.t1557.001
+logsource:
+    category: network_connection
+    product: linux
+detection:
+    selection:
+        Initiated: 'true'
+    condition: selection
+falsepositives:
+    - Network testing tools
+level: high
