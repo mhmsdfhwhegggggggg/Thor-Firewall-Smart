@@ -1,0 +1,25 @@
+title: AWS EC2 IMDSv1 Metadata Credential Theft
+id: 3a2b3c4d-0005-4000-8000-000000000005
+status: stable
+description: Detects SSRF-based attacks abusing EC2 IMDSv1 to steal instance credentials
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1552/005/
+tags:
+  - attack.credential_access
+  - attack.t1552.005
+logsource:
+  category: proxy
+  product: linux
+detection:
+  selection:
+    DestinationHostname: '169.254.169.254'
+    DestinationURI|contains:
+      - '/latest/meta-data/iam/security-credentials'
+      - '/latest/meta-data/identity-credentials'
+      - '/latest/dynamic/instance-identity'
+  condition: selection
+level: high
+falsepositives:
+  - Legitimate SDK/agent credential retrieval

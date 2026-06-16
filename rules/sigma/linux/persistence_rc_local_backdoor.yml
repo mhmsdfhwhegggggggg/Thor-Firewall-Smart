@@ -1,0 +1,23 @@
+title: Backdoor Injected into /etc/rc.local or /etc/rc.d
+id: 1a2b3c4d-0053-4000-8000-000000000053
+status: stable
+description: Detects modification of legacy startup scripts for persistence
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1037.004]
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/etc/rc.local'
+      - '/etc/rc.d/'
+      - '/etc/init.d/'
+      - '/etc/rc0.d/'
+      - '/etc/rc6.d/'
+  filter_packages:
+    Image|contains: ['/usr/bin/dpkg', '/usr/bin/rpm', 'apt', 'yum', 'dnf', 'update-rc.d']
+  condition: selection and not filter_packages
+level: high
+falsepositives: [Package installers, legacy init scripts]

@@ -1,0 +1,22 @@
+title: Suspicious Expect Script for Automation/Privilege Escalation
+id: 1a2b3c4d-0048-4000-8000-000000000048
+status: experimental
+description: Detects expect scripts used to automate interactive prompts for privilege escalation
+author: Thor Security
+date: 2025/01/01
+tags: [attack.privilege_escalation, attack.t1059.004]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: ['/expect', '/autoexpect']
+    CommandLine|contains:
+      - 'spawn su'
+      - 'spawn sudo'
+      - 'spawn passwd'
+      - 'expect "Password"'
+      - 'send "password"'
+  condition: selection
+level: high
+falsepositives: [Automation scripts with legitimate expect usage]

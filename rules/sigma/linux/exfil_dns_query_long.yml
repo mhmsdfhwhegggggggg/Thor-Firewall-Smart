@@ -1,0 +1,22 @@
+title: Long DNS Query (DNS Exfiltration Indicator)
+id: 1a2b3c4d-0060-4000-8000-000000000060
+status: experimental
+description: Detects unusually long DNS query labels used for data exfiltration
+author: Thor Security
+date: 2025/01/01
+tags: [attack.exfiltration, attack.t1048.003]
+logsource:
+  category: dns
+  product: linux
+detection:
+  selection:
+    dns.query.name|re: '.{60,}\..{3,}'
+  filter_legit:
+    dns.query.name|contains:
+      - '_dmarc.'
+      - '_domainkey.'
+      - '.cloudfront.net'
+      - '.amazonaws.com'
+  condition: selection and not filter_legit
+level: medium
+falsepositives: [Legitimate long subdomains, CDN hostnames]

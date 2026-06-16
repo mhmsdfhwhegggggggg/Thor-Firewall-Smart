@@ -1,0 +1,28 @@
+title: BloodHound Active Directory Enumeration
+id: 2a2b3c4d-0007-4000-8000-000000000007
+status: stable
+description: Detects BloodHound AD enumeration used for attack path mapping
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1069/002/
+tags:
+  - attack.discovery
+  - attack.t1069.002
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+      - 'SharpHound'
+      - 'Invoke-BloodHound'
+      - 'BloodHound'
+      - '-CollectionMethod'
+      - 'AzureHound'
+      - 'Group,LocalAdmin,Session,Trusts'
+      - 'All,LoggedOn'
+  condition: selection
+level: high
+falsepositives:
+  - Authorized red team activities

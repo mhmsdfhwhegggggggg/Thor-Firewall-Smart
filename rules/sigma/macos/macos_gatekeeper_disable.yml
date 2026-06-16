@@ -1,0 +1,20 @@
+title: macOS Gatekeeper Disabled
+id: 5a2b3c4d-0004-4000-8000-000000000004
+status: stable
+description: Detects disabling of Gatekeeper allowing unsigned app execution
+author: Thor Security
+date: 2025/01/01
+tags: [attack.defense_evasion, attack.t1553.001]
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    CommandLine|contains:
+      - 'spctl --master-disable'
+      - 'spctl -a -t open'
+      - 'xattr -d com.apple.quarantine'
+      - 'defaults write com.apple.LaunchServices LSQuarantine -bool NO'
+  condition: selection
+level: high
+falsepositives: [Developers, authorized power users]

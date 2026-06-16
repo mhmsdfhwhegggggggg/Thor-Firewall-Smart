@@ -1,0 +1,25 @@
+title: Chisel/Ligolo Reverse Tunnel Tool
+id: 1a2b3c4d-0054-4000-8000-000000000054
+status: stable
+description: Detects use of Chisel, Ligolo, or similar fast TCP/UDP tunnel tools
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1572]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'chisel server'
+      - 'chisel client'
+      - 'ligolo'
+      - 'proxy --selfcert'
+      - 'agent --connect'
+      - 'rpivot'
+      - 'pwncat'
+      - 'revsocks'
+      - 'gost'
+  condition: selection
+level: high
+falsepositives: [Authorized penetration testing]

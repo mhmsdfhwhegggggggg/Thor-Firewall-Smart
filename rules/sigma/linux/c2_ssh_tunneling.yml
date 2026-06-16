@@ -1,0 +1,27 @@
+title: SSH Reverse Tunnel or SOCKS Proxy
+id: 1a2b3c4d-0014-4000-8000-000000000014
+status: stable
+description: Detects SSH reverse tunnels and SOCKS proxying — used for C2/exfiltration
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1572, attack.t1090.002]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'ssh -R'
+      - 'ssh -L'
+      - 'ssh -D'
+      - 'ssh -N'
+      - 'ssh -w'
+      - '-o StrictHostKeyChecking=no'
+      - 'ProxyCommand'
+      - 'sshuttle'
+    CommandLine|contains:
+      - '0.0.0.0'
+      - '*:'
+  condition: selection
+level: high
+falsepositives: [Legitimate SSH tunneling by admins]

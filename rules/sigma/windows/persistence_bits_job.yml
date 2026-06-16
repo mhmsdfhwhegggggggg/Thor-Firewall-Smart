@@ -1,0 +1,21 @@
+title: BITS Job Persistence or Download
+id: 2a2b3c4d-0028-4000-8000-000000000028
+status: stable
+description: Detects BITS jobs used for persistence or downloading malicious content
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1197]
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+      - 'bitsadmin /transfer'
+      - 'bitsadmin /create'
+      - 'bitsadmin /addfile'
+      - 'bitsadmin /setnotifycmdline'
+      - 'Start-BitsTransfer'
+  condition: selection
+level: medium
+falsepositives: [Windows Update, WSUS, software deployment]

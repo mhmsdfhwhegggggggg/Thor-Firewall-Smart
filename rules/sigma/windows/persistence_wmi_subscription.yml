@@ -1,0 +1,27 @@
+title: WMI Event Subscription Persistence
+id: 2a2b3c4d-0001-4000-8000-000000000001
+status: stable
+description: Detects creation of WMI event subscriptions for persistence — common APT technique
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1546/003/
+tags:
+  - attack.persistence
+  - attack.t1546.003
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+      - 'wmic /namespace'
+      - '__EventFilter'
+      - '__CommandLineEventConsumer'
+      - '__FilterToConsumerBinding'
+      - 'ActiveScriptEventConsumer'
+      - 'NTEventLogEventConsumer'
+  condition: selection
+level: high
+falsepositives:
+  - Legitimate WMI monitoring scripts

@@ -1,0 +1,24 @@
+title: Golang C2 Implant Execution
+id: 1a2b3c4d-0061-4000-8000-000000000061
+status: stable
+description: Detects execution of Go-compiled binaries with C2 implant indicators
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1071]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - '--server'
+      - '--beacon'
+      - '--implant'
+      - '--payload'
+    Image|contains:
+      - '/tmp/'
+      - '/dev/shm/'
+      - '/var/tmp/'
+  condition: selection
+level: high
+falsepositives: [Legitimate server applications in temp dirs (rare)]

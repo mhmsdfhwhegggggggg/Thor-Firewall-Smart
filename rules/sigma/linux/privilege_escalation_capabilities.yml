@@ -1,0 +1,28 @@
+title: Linux Capabilities Privilege Escalation
+id: 1a2b3c4d-0009-4000-8000-000000000009
+status: stable
+description: Detects setting dangerous Linux capabilities that allow privilege escalation
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1548/001/
+tags:
+  - attack.privilege_escalation
+  - attack.t1548.001
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'setcap cap_setuid'
+      - 'setcap cap_sys_admin'
+      - 'setcap cap_sys_ptrace'
+      - 'setcap cap_net_raw'
+      - 'setcap cap_dac_override'
+      - 'cap_sys_module'
+      - 'cap_sys_rawio'
+  condition: selection
+level: high
+falsepositives:
+  - Sysadmin setting legitimate capabilities

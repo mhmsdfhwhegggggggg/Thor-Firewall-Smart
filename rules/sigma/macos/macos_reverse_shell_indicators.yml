@@ -1,0 +1,22 @@
+title: macOS Reverse Shell Indicators
+id: 5a2b3c4d-0010-4000-8000-000000000010
+status: stable
+description: Detects reverse shell one-liners commonly used on macOS
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1059.004]
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    CommandLine|contains:
+      - 'exec 5<>/dev/tcp/'
+      - '/dev/tcp/'
+      - 'bash -i >& /dev/tcp'
+      - 'mkfifo /tmp/'
+      - 'nc -e /bin/bash'
+      - 'nc -e /bin/sh'
+  condition: selection
+level: critical
+falsepositives: [Security testing]

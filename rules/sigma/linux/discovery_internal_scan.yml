@@ -1,0 +1,30 @@
+title: Internal Network Discovery Scan
+id: 1a2b3c4d-0028-4000-8000-000000000028
+status: stable
+description: Detects internal network scanning tools suggesting post-compromise discovery
+author: Thor Security
+date: 2025/01/01
+tags: [attack.discovery, attack.t1046]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+      - '/nmap'
+      - '/masscan'
+      - '/zmap'
+      - '/rustscan'
+      - '/unicornscan'
+    CommandLine|contains:
+      - '192.168.'
+      - '10.'
+      - '172.16.'
+      - '172.17.'
+      - '172.31.'
+      - '/8'
+      - '/16'
+      - '/24'
+  condition: selection
+level: high
+falsepositives: [Authorized network auditing]

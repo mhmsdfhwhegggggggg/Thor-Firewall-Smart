@@ -1,0 +1,25 @@
+title: Bulk S3 Data Exfiltration via AWS CLI
+id: 1a2b3c4d-0040-4000-8000-000000000040
+status: stable
+description: Detects bulk AWS S3 data exfiltration using aws cli sync/cp commands
+author: Thor Security
+date: 2025/01/01
+tags: [attack.exfiltration, attack.t1537]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'aws s3 sync'
+      - 'aws s3 cp --recursive'
+      - 'aws s3api get-object'
+      - 'rclone copy'
+      - 'rclone sync'
+    CommandLine|contains:
+      - 's3://'
+      - 'gs://'
+      - 'wasbs://'
+  condition: selection
+level: high
+falsepositives: [Authorized cloud data migrations]

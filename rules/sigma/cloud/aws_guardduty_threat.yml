@@ -1,0 +1,28 @@
+title: AWS GuardDuty High-Severity Finding
+id: 3a2b3c4d-0008-4000-8000-000000000008
+status: stable
+description: Detects GuardDuty findings mapped to known attack patterns
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1078/
+tags:
+  - attack.initial_access
+  - attack.t1078
+logsource:
+  product: aws
+  service: guardduty
+detection:
+  selection:
+    detail.type|contains:
+      - 'UnauthorizedAccess'
+      - 'CryptoCurrency'
+      - 'Backdoor'
+      - 'Trojan'
+      - 'Recon'
+      - 'Exfiltration'
+    detail.severity|gte: 7
+  condition: selection
+level: high
+falsepositives:
+  - False positives from GuardDuty (review severity 7-10 findings)

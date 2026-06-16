@@ -1,0 +1,26 @@
+title: Process Hiding via /proc Manipulation
+id: 1a2b3c4d-0002-4000-8000-000000000002
+status: stable
+description: Detects attempts to hide processes by manipulating /proc filesystem entries
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1014/
+tags:
+  - attack.defense_evasion
+  - attack.t1014
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - '/proc/*/status'
+      - 'hide_pid'
+      - 'hidepid='
+      - 'prctl(PR_SET_NAME'
+      - 'remount.*hidepid'
+  condition: selection
+level: high
+falsepositives:
+  - Security tools that monitor /proc

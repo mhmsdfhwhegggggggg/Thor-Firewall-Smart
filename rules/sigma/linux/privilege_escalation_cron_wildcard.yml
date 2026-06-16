@@ -1,0 +1,19 @@
+title: Cron Wildcard Injection for Privilege Escalation
+id: 1a2b3c4d-0021-4000-8000-000000000021
+status: stable
+description: Detects creation of files exploiting cron/tar/rsync wildcard injection
+author: Thor Security
+date: 2025/01/01
+tags: [attack.privilege_escalation, attack.t1053.003]
+logsource:
+  category: file_create
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '--checkpoint='
+      - '--checkpoint-action='
+      - '-e sh'
+  condition: selection
+level: high
+falsepositives: [Unlikely — highly suspicious filenames]

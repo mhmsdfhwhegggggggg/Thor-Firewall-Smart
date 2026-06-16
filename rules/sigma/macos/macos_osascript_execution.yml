@@ -1,0 +1,21 @@
+title: macOS osascript Execution for Privilege Escalation
+id: 5a2b3c4d-0002-4000-8000-000000000002
+status: stable
+description: Detects osascript (AppleScript/JavaScript) used for privilege escalation
+author: Thor Security
+date: 2025/01/01
+tags: [attack.privilege_escalation, attack.t1059.002]
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: '/osascript'
+    CommandLine|contains:
+      - 'do shell script'
+      - 'with administrator privileges'
+      - 'keystroke'
+      - 'System Events'
+  condition: selection
+level: high
+falsepositives: [Legitimate macOS automation scripts]

@@ -1,0 +1,24 @@
+title: Systemd Socket Activation Backdoor
+id: 1a2b3c4d-0017-4000-8000-000000000017
+status: experimental
+description: Detects creation of systemd socket units for persistence via socket activation
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1543.002]
+logsource:
+  category: file_create
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/etc/systemd/system/'
+      - '/usr/lib/systemd/system/'
+      - '/lib/systemd/system/'
+    TargetFilename|endswith:
+      - '.socket'
+      - '.timer'
+  filter_packages:
+    Image|contains: ['/usr/bin/dpkg', '/usr/bin/rpm', 'apt-get', 'yum', 'dnf', 'pip']
+  condition: selection and not filter_packages
+level: high
+falsepositives: [Package installations, system updates]

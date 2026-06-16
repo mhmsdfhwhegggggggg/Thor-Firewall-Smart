@@ -1,0 +1,24 @@
+title: Disk Wiping or Destructive Commands
+id: 1a2b3c4d-0023-4000-8000-000000000023
+status: stable
+description: Detects commands used for disk wiping or destructive operations
+author: Thor Security
+date: 2025/01/01
+tags: [attack.impact, attack.t1485]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'shred -'
+      - 'wipe -'
+      - 'dd if=/dev/zero'
+      - 'dd if=/dev/urandom'
+      - 'rm -rf /'
+      - 'rm -rf /*'
+      - 'wipefs'
+      - 'hdparm --security-erase'
+  condition: selection
+level: critical
+falsepositives: [Authorized data sanitization]

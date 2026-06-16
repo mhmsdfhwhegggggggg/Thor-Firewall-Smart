@@ -1,0 +1,21 @@
+title: Bash Environment Cleanup Before Attack
+id: 1a2b3c4d-0052-4000-8000-000000000052
+status: experimental
+description: Detects aggressive environment cleanup before payload execution
+author: Thor Security
+date: 2025/01/01
+tags: [attack.defense_evasion, attack.t1070]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'unset HISTFILE'
+      - 'HISTSIZE=0'
+      - 'HISTFILESIZE=0'
+      - 'export HISTFILE=/dev/null'
+      - 'set +o history'
+  condition: selection
+level: medium
+falsepositives: [Privacy-conscious users, CI scripts]

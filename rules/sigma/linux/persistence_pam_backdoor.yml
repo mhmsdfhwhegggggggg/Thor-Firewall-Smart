@@ -1,0 +1,22 @@
+title: PAM Module Tampering
+id: 1a2b3c4d-0019-4000-8000-000000000019
+status: stable
+description: Detects modification of PAM configuration or modules — used for auth bypass
+author: Thor Security
+date: 2025/01/01
+tags: [attack.credential_access, attack.t1556.003]
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/etc/pam.d/'
+      - '/lib/security/'
+      - '/lib64/security/'
+      - '/usr/lib/security/'
+  filter_legit:
+    Image|contains: ['/usr/bin/dpkg', '/usr/bin/rpm', 'apt-get', 'yum', 'dnf']
+  condition: selection and not filter_legit
+level: critical
+falsepositives: [Package installations]

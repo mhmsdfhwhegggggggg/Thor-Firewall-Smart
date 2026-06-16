@@ -1,0 +1,23 @@
+title: DNS Rebinding or Split-Horizon DNS Abuse
+id: 1a2b3c4d-0024-4000-8000-000000000024
+status: experimental
+description: Detects short TTL DNS responses consistent with DNS rebinding attacks
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1001.003]
+logsource:
+  category: dns
+  product: linux
+detection:
+  selection:
+    DnsResponseTtl|lt: 5
+    DnsRecord: A
+    QueryName|contains:
+      - '.dyn.'
+      - 'rebind'
+      - 'rbndr'
+      - 'xip.io'
+      - 'nip.io'
+  condition: selection
+level: medium
+falsepositives: [CDN providers, dynamic DNS]

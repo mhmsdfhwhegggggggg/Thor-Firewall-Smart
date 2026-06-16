@@ -1,0 +1,26 @@
+title: Azure AD MFA Disabled for User
+id: 3a2b3c4d-0010-4000-8000-000000000010
+status: stable
+description: Detects disabling of MFA for Azure AD users — common pre-attack step
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1562/007/
+tags:
+  - attack.defense_evasion
+  - attack.t1562.007
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName|contains:
+      - 'Disable Strong Authentication'
+      - 'Update user'
+    properties|contains:
+      - 'StrongAuthenticationMethods'
+      - 'MFA'
+  condition: selection
+level: high
+falsepositives:
+  - Authorized MFA exemptions

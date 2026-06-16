@@ -1,0 +1,18 @@
+title: macOS Login Item Added
+id: 5a2b3c4d-0005-4000-8000-000000000005
+status: stable
+description: Detects addition of login items for user-context persistence
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1547.015]
+logsource:
+  category: file_event
+  product: macos
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/Library/Preferences/com.apple.loginitems.plist'
+      - '/Users/*/Library/Application Support/com.apple.backgroundtaskmanagement'
+  condition: selection
+level: medium
+falsepositives: [Legitimate app installers]

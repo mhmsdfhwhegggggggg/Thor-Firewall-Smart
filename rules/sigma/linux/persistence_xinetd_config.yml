@@ -1,0 +1,22 @@
+title: xinetd/inetd Service Configuration Backdoor
+id: 1a2b3c4d-0047-4000-8000-000000000047
+status: stable
+description: Detects modification of xinetd/inetd configuration for backdoor service
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1543.002]
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/etc/xinetd.conf'
+      - '/etc/xinetd.d/'
+      - '/etc/inetd.conf'
+      - '/etc/inetd.d/'
+  filter_packages:
+    Image|contains: ['/usr/bin/dpkg', '/usr/bin/rpm', 'apt', 'yum', 'dnf']
+  condition: selection and not filter_packages
+level: high
+falsepositives: [Package installations]

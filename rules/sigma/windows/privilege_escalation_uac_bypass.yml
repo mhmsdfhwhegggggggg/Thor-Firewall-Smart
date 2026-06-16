@@ -1,0 +1,32 @@
+title: User Account Control (UAC) Bypass
+id: 2a2b3c4d-0010-4000-8000-000000000010
+status: stable
+description: Detects common UAC bypass techniques using auto-elevation
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1548/002/
+tags:
+  - attack.privilege_escalation
+  - attack.t1548.002
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+      - 'fodhelper'
+      - 'eventvwr.exe'
+      - 'sdclt.exe'
+      - 'slui.exe'
+      - 'SilentCleanup'
+      - 'DiskCleanup'
+      - 'computerdefaults'
+    CommandLine|contains:
+      - 'reg add'
+      - 'HKCU\Software\Classes'
+      - 'ms-settings'
+  condition: selection
+level: high
+falsepositives:
+  - Disk cleanup operations

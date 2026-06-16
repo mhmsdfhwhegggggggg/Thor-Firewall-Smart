@@ -1,0 +1,23 @@
+title: Network Port Forwarding via iptables/nftables
+id: 4a2b3c4d-0013-4000-8000-000000000013
+status: stable
+description: Detects iptables/nftables rules for port forwarding — used for pivoting
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1572, attack.lateral_movement, attack.t1090.001]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'iptables -A PREROUTING'
+      - 'iptables -t nat'
+      - 'DNAT --to-destination'
+      - 'nft add rule'
+      - 'nft.*dnat'
+      - 'socat TCP'
+      - 'rinetd'
+  condition: selection
+level: high
+falsepositives: [Load balancers, NAT gateways]

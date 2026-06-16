@@ -1,0 +1,26 @@
+title: Data Staged in Archive Before Exfiltration
+id: 1a2b3c4d-0045-4000-8000-000000000045
+status: experimental
+description: Detects creation of large archives in /tmp or /dev/shm — staging for exfil
+author: Thor Security
+date: 2025/01/01
+tags: [attack.exfiltration, attack.t1560.001]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'tar -czf /tmp/'
+      - 'tar -cjf /tmp/'
+      - 'zip -r /tmp/'
+      - '7z a /tmp/'
+      - 'tar czf /dev/shm/'
+    CommandLine|contains:
+      - '/etc/'
+      - '/home/'
+      - '/var/'
+      - '/opt/'
+  condition: selection
+level: high
+falsepositives: [Authorized backup scripts]

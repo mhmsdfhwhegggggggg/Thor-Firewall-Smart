@@ -1,0 +1,17 @@
+title: Persistence via at/batch Job
+id: 1a2b3c4d-0011-4000-8000-000000000011
+status: stable
+description: Detects use of 'at' or 'batch' commands for persistence scheduling
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1053.001]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: ['/at', '/batch', '/atrm']
+    CommandLine|contains: ['http', '/tmp/', '/dev/shm', 'bash', 'python', 'perl', 'nc', 'curl', 'wget']
+  condition: selection
+level: high
+falsepositives: [Scheduled maintenance tasks]

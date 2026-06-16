@@ -1,0 +1,22 @@
+title: SMB Lateral Movement Patterns
+id: 4a2b3c4d-0009-4000-8000-000000000009
+status: stable
+description: Detects SMB connections to admin shares used for lateral movement
+author: Thor Security
+date: 2025/01/01
+tags: [attack.lateral_movement, attack.t1021.002]
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    DestinationPort: 445
+    Initiated: 'true'
+  selection_admin_share:
+    DestinationHostname|contains:
+      - '\admin$'
+      - '\c$'
+      - '\ipc$'
+  condition: selection or selection_admin_share
+level: medium
+falsepositives: [Legitimate file shares, backup operations]

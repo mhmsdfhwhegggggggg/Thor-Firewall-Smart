@@ -1,0 +1,23 @@
+title: Polkit pkexec Privilege Escalation (PwnKit CVE-2021-4034)
+id: 1a2b3c4d-0042-4000-8000-000000000042
+status: stable
+description: Detects exploitation of CVE-2021-4034 polkit pkexec local privilege escalation
+author: Thor Security
+date: 2025/01/01
+tags: [attack.privilege_escalation, attack.t1068]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    ParentImage|endswith: '/pkexec'
+    Image|endswith: ['/bash', '/sh', '/dash', '/python3', '/perl']
+    ParentCommandLine|contains: ''
+  selection_env:
+    CommandLine|contains:
+      - 'GCONV_PATH='
+      - 'CHARSET='
+      - 'GIO_USE_VFS='
+  condition: selection or selection_env
+level: critical
+falsepositives: [Legitimate pkexec GUI prompts]

@@ -1,0 +1,24 @@
+title: Execution from Shared Memory (/dev/shm, /run/shm)
+id: 1a2b3c4d-0007-4000-8000-000000000007
+status: stable
+description: Detects execution of files from shared memory — common fileless malware technique
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1055/009/
+tags:
+  - attack.defense_evasion
+  - attack.t1055.009
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|contains:
+      - '/dev/shm/'
+      - '/run/shm/'
+      - '/proc/self/fd'
+  condition: selection
+level: critical
+falsepositives:
+  - Legitimate IPC using shared memory

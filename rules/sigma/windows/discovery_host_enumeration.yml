@@ -1,0 +1,26 @@
+title: Host Reconnaissance Commands
+id: 2a2b3c4d-0045-4000-8000-000000000045
+status: stable
+description: Detects common host enumeration commands used post-compromise
+author: Thor Security
+date: 2025/01/01
+tags: [attack.discovery, attack.t1082]
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+      - 'systeminfo'
+      - 'whoami /all'
+      - 'whoami /priv'
+      - 'net localgroup administrators'
+      - 'ipconfig /all'
+      - 'arp -a'
+      - 'route print'
+      - 'netstat -ano'
+      - 'tasklist /v'
+      - 'qwinsta'
+  condition: selection | count() by CommandLine > 3
+level: medium
+falsepositives: [Helpdesk, system administrators]

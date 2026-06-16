@@ -1,0 +1,21 @@
+title: ICMP Covert Channel / Exfiltration
+id: 1a2b3c4d-0020-4000-8000-000000000020
+status: experimental
+description: Detects tools used for data exfiltration over ICMP protocol
+author: Thor Security
+date: 2025/01/01
+tags: [attack.exfiltration, attack.t1048.003, attack.command_and_control, attack.t1095]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'icmptunnel'
+      - 'ptunnel'
+      - 'icmpsh'
+      - 'ping -p'
+      - 'nping --icmp'
+  condition: selection
+level: high
+falsepositives: [Penetration testers, security researchers]

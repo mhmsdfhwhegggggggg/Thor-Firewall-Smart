@@ -1,0 +1,25 @@
+title: Executable Placed in Startup Folder
+id: 2a2b3c4d-0048-4000-8000-000000000048
+status: stable
+description: Detects executables placed in Windows Startup folders for persistence
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1547.001]
+logsource:
+  category: file_event
+  product: windows
+detection:
+  selection:
+    TargetFilename|contains:
+      - '\Start Menu\Programs\Startup\'
+      - '\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\'
+      - 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\'
+    TargetFilename|endswith:
+      - '.exe'
+      - '.bat'
+      - '.vbs'
+      - '.ps1'
+      - '.lnk'
+  condition: selection
+level: high
+falsepositives: [Legitimate software installers]

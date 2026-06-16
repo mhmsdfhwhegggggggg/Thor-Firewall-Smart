@@ -1,0 +1,20 @@
+title: Sudoers File Modified
+id: 1a2b3c4d-0016-4000-8000-000000000016
+status: stable
+description: Detects modifications to sudoers files for privilege escalation
+author: Thor Security
+date: 2025/01/01
+tags: [attack.privilege_escalation, attack.t1548.003]
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/etc/sudoers'
+      - '/etc/sudoers.d/'
+  filter_visudo:
+    Image|endswith: '/visudo'
+  condition: selection and not filter_visudo
+level: critical
+falsepositives: [Authorized sudo configuration changes]

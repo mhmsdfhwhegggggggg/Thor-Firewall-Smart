@@ -1,0 +1,39 @@
+title: Download and Execute One-Liner
+id: 1a2b3c4d-0010-4000-8000-000000000010
+status: stable
+description: Detects common download-and-execute one-liners (curl/wget piped to bash/sh)
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
+tags:
+  - attack.execution
+  - attack.t1059.004
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_curl:
+    CommandLine|contains:
+      - 'curl'
+    CommandLine|contains|all:
+      - '|'
+      - 'bash'
+  selection_wget:
+    CommandLine|contains:
+      - 'wget'
+    CommandLine|contains|all:
+      - '-O-'
+      - 'bash'
+  selection_pipe:
+    CommandLine|contains:
+      - '| sh'
+      - '| bash'
+      - '|bash'
+      - '|sh'
+    CommandLine|contains:
+      - 'http'
+  condition: selection_curl or selection_wget or selection_pipe
+level: high
+falsepositives:
+  - Legitimate package install scripts

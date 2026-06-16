@@ -1,0 +1,33 @@
+title: Write to /etc/passwd or /etc/shadow
+id: 1a2b3c4d-0008-4000-8000-000000000008
+status: stable
+description: Detects direct writes to /etc/passwd or /etc/shadow — backdoor account creation
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1136/001/
+tags:
+  - attack.persistence
+  - attack.t1136.001
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/etc/passwd'
+      - '/etc/shadow'
+      - '/etc/sudoers'
+      - '/etc/sudoers.d/'
+  filter_legit:
+    Image|contains:
+      - 'useradd'
+      - 'usermod'
+      - 'passwd'
+      - 'adduser'
+      - 'chpasswd'
+      - 'visudo'
+  condition: selection and not filter_legit
+level: critical
+falsepositives:
+  - User management scripts

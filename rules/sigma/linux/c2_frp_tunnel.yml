@@ -1,0 +1,22 @@
+title: FRP (Fast Reverse Proxy) C2 Tunnel
+id: 1a2b3c4d-0058-4000-8000-000000000058
+status: stable
+description: Detects Fast Reverse Proxy — Chinese-developed tool commonly abused for C2
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1090.002]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'frpc '
+      - 'frps '
+      - 'frpc.ini'
+      - 'frps.ini'
+      - 'frpc.toml'
+      - 'frps.toml'
+  condition: selection
+level: high
+falsepositives: [Authorized reverse proxy setups]

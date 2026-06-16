@@ -1,0 +1,21 @@
+title: macOS LaunchAgent/LaunchDaemon Persistence
+id: 5a2b3c4d-0001-4000-8000-000000000001
+status: stable
+description: Detects creation of LaunchAgent or LaunchDaemon plist files for persistence
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1543.001]
+logsource:
+  category: file_event
+  product: macos
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/Library/LaunchAgents/'
+      - '/Library/LaunchDaemons/'
+      - '/Users/*/Library/LaunchAgents/'
+  filter_legit:
+    Image|contains: ['/Library/Apple/', '/usr/bin/', '/usr/sbin/']
+  condition: selection and not filter_legit
+level: high
+falsepositives: [Software installers, legitimate macOS tools]

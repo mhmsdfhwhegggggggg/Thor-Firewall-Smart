@@ -1,0 +1,31 @@
+title: Critical Service Stopped (Possible Ransomware / Sabotage)
+id: 1a2b3c4d-0038-4000-8000-000000000038
+status: stable
+description: Detects stopping of critical services — often first step in ransomware attacks
+author: Thor Security
+date: 2025/01/01
+tags: [attack.impact, attack.t1489]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'systemctl stop'
+      - 'service.*stop'
+      - 'pkill.*mysql'
+      - 'pkill.*postgres'
+      - 'pkill.*apache'
+      - 'pkill.*nginx'
+      - 'pkill.*httpd'
+    CommandLine|contains:
+      - 'mysql'
+      - 'postgres'
+      - 'apache2'
+      - 'nginx'
+      - 'mongod'
+      - 'redis'
+      - 'backup'
+  condition: selection
+level: high
+falsepositives: [Authorized service maintenance]

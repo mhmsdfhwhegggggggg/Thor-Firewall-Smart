@@ -1,0 +1,24 @@
+title: Go/Golang Reverse Shell
+id: 1a2b3c4d-0051-4000-8000-000000000051
+status: stable
+description: Detects Go-based reverse shell payloads
+author: Thor Security
+date: 2025/01/01
+tags: [attack.execution, attack.t1059]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'net.Dial('
+      - 'os/exec'
+      - 'exec.Command'
+      - 'go run'
+    CommandLine|contains:
+      - '/bin/bash'
+      - '/bin/sh'
+      - 'tcp'
+  condition: selection
+level: high
+falsepositives: [Go network tools]

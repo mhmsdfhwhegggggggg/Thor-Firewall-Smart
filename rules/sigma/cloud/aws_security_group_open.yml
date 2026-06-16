@@ -1,0 +1,32 @@
+title: Security Group Opened to the World (0.0.0.0/0)
+id: 3a2b3c4d-0006-4000-8000-000000000006
+status: stable
+description: Detects security group rules allowing inbound access from any IP
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1190/
+tags:
+  - attack.initial_access
+  - attack.t1190
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName: 'AuthorizeSecurityGroupIngress'
+    requestParameters|contains:
+      - '0.0.0.0/0'
+      - '::/0'
+  selection_sensitive_port:
+    requestParameters|contains:
+      - '"fromPort":22'
+      - '"fromPort":3389'
+      - '"fromPort":5432'
+      - '"fromPort":3306'
+      - '"fromPort":6379'
+      - '"fromPort":27017'
+  condition: selection and selection_sensitive_port
+level: high
+falsepositives:
+  - Authorized network configuration changes

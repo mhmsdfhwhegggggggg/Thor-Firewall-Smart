@@ -1,0 +1,21 @@
+title: PATH Environment Variable Injection
+id: 1a2b3c4d-0057-4000-8000-000000000057
+status: experimental
+description: Detects PATH manipulation to hijack command execution for privilege escalation
+author: Thor Security
+date: 2025/01/01
+tags: [attack.privilege_escalation, attack.t1574.007]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'PATH=.'
+      - 'PATH=:/usr/local/bin'
+      - 'export PATH=.:'
+      - 'PATH=/tmp:'
+      - 'PATH=/dev/shm:'
+  condition: selection
+level: high
+falsepositives: [Development environment setups]

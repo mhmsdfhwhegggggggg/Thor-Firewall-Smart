@@ -1,0 +1,26 @@
+title: Container Runtime Enumeration
+id: 1a2b3c4d-0039-4000-8000-000000000039
+status: stable
+description: Detects enumeration of container environment for escape/lateral movement
+author: Thor Security
+date: 2025/01/01
+tags: [attack.discovery, attack.t1613]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'docker ps'
+      - 'docker images'
+      - 'docker inspect'
+      - 'kubectl get pods'
+      - 'kubectl get secrets'
+      - 'kubectl get nodes'
+      - 'crictl ps'
+      - 'ctr containers'
+      - 'nsenter'
+      - 'cat /proc/1/cgroup'
+  condition: selection
+level: medium
+falsepositives: [DevOps operations, container management]

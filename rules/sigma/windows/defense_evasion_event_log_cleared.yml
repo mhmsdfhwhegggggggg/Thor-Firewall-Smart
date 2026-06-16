@@ -1,0 +1,16 @@
+title: Windows Event Logs Cleared
+id: 2a2b3c4d-0036-4000-8000-000000000036
+status: stable
+description: Detects clearing of Windows event logs to cover attack tracks
+author: Thor Security
+date: 2025/01/01
+tags: [attack.defense_evasion, attack.t1070.001]
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    EventID: [1102, 517, 104]
+  condition: selection
+level: high
+falsepositives: [Authorized log rotation (rarely done via UI)]

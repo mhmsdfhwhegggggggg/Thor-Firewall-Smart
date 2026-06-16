@@ -1,0 +1,24 @@
+title: GCP IAM Owner Role Granted
+id: 3a2b3c4d-0015-4000-8000-000000000015
+status: stable
+description: Detects granting of Owner role in GCP — maximum privilege
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1484/
+tags:
+  - attack.privilege_escalation
+  - attack.t1484
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    protoPayload.methodName: 'SetIamPolicy'
+    protoPayload.request.policy.bindings|contains:
+      - 'roles/owner'
+      - 'roles/editor'
+  condition: selection
+level: critical
+falsepositives:
+  - Authorized GCP administration

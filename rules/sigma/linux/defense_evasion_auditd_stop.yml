@@ -1,0 +1,22 @@
+title: Auditd Service Stopped or Configuration Cleared
+id: 1a2b3c4d-0027-4000-8000-000000000027
+status: stable
+description: Detects stopping the audit daemon or clearing audit logs — covers tracks
+author: Thor Security
+date: 2025/01/01
+tags: [attack.defense_evasion, attack.t1562.012]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'service auditd stop'
+      - 'systemctl stop auditd'
+      - 'auditctl -e 0'
+      - '> /var/log/audit/audit.log'
+      - 'truncate.*audit.log'
+      - 'rm.*audit.log'
+  condition: selection
+level: critical
+falsepositives: [Authorized audit log rotation]

@@ -1,0 +1,30 @@
+title: AppLocker/WDAC Bypass Technique
+id: 2a2b3c4d-0009-4000-8000-000000000009
+status: stable
+description: Detects AppLocker bypass techniques using trusted Windows binaries
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1218/
+tags:
+  - attack.defense_evasion
+  - attack.t1218
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+      - 'regsvr32 /s /n /u /i:'
+      - 'regsvr32.exe /s /n /u /i:http'
+      - 'mshta http'
+      - 'mshta.exe http'
+      - 'rundll32.exe javascript:'
+      - 'cscript.exe http'
+      - 'wscript.exe http'
+      - 'certutil -urlcache -split -f'
+      - 'bitsadmin /transfer'
+  condition: selection
+level: high
+falsepositives:
+  - Legitimate software installers (review carefully)

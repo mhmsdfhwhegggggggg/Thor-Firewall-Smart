@@ -1,0 +1,32 @@
+title: Direct Memory Access via /dev/mem or /dev/kmem
+id: 1a2b3c4d-0004-4000-8000-000000000004
+status: stable
+description: Detects direct access to kernel memory via /dev/mem or /dev/kmem — used by rootkits
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1014/
+tags:
+  - attack.defense_evasion
+  - attack.t1014
+logsource:
+  category: file_access
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/dev/mem'
+      - '/dev/kmem'
+      - '/dev/port'
+      - '/dev/sda'
+      - '/dev/nvme'
+  filter_allowed:
+    ParentImage|contains:
+      - '/usr/bin/dd'
+      - 'fsck'
+      - 'fdisk'
+  condition: selection and not filter_allowed
+level: critical
+falsepositives:
+  - Disk recovery tools
+  - Hardware diagnostics

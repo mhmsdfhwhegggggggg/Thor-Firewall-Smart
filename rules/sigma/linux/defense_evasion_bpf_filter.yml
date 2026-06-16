@@ -1,0 +1,24 @@
+title: BPF/eBPF Program Loaded for Traffic Interception
+id: 1a2b3c4d-0044-4000-8000-000000000044
+status: experimental
+description: Detects loading of suspicious eBPF programs for rootkit or traffic sniffing
+author: Thor Security
+date: 2025/01/01
+tags: [attack.defense_evasion, attack.t1014, attack.collection, attack.t1040]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'bpf_prog_load'
+      - 'BPF_PROG_LOAD'
+      - 'tc qdisc add'
+      - 'tc filter add'
+      - 'xdp_pass'
+      - 'bpftool prog load'
+  filter_legit:
+    Image|contains: ['/usr/sbin/tc', '/usr/sbin/bpftool', 'cilium', 'falco', 'datadog']
+  condition: selection and not filter_legit
+level: high
+falsepositives: [Security tools, network monitoring, Kubernetes CNI plugins]

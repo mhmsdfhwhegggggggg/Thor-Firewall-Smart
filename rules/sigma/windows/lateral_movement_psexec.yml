@@ -1,0 +1,30 @@
+title: PsExec Lateral Movement
+id: 2a2b3c4d-0008-4000-8000-000000000008
+status: stable
+description: Detects PsExec usage for lateral movement — creates PSEXESVC service
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1569/002/
+tags:
+  - attack.lateral_movement
+  - attack.t1569.002
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+      - 'psexec'
+      - 'PSEXESVC'
+      - '\admin$\'
+      - '\ipc$'
+    CommandLine|contains:
+      - '/accepteula'
+      - '-accepteula'
+  selection_service:
+    ServiceName: 'PSEXESVC'
+  condition: selection or selection_service
+level: high
+falsepositives:
+  - Authorized system administration with PsExec

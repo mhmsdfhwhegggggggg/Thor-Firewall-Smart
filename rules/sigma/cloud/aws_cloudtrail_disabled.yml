@@ -1,0 +1,25 @@
+title: AWS CloudTrail Logging Disabled or Modified
+id: 3a2b3c4d-0003-4000-8000-000000000003
+status: stable
+description: Detects disabling or modifying CloudTrail to hide malicious activity
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1562/008/
+tags:
+  - attack.defense_evasion
+  - attack.t1562.008
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName|contains:
+      - 'StopLogging'
+      - 'DeleteTrail'
+      - 'UpdateTrail'
+      - 'PutEventSelectors'
+  condition: selection
+level: critical
+falsepositives:
+  - Authorized CloudTrail configuration changes

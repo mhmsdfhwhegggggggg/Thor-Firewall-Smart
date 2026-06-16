@@ -1,0 +1,18 @@
+title: BGP Route Announcement Anomaly
+id: 4a2b3c4d-0020-4000-8000-000000000020
+status: experimental
+description: Detects BGP prefix announcements from unexpected ASNs (BGP hijacking)
+author: Thor Security
+date: 2025/01/01
+tags: [attack.impact, attack.t1584.007]
+logsource:
+  category: network
+  product: router
+detection:
+  selection:
+    event.type: 'bgp_update'
+    bgp.prefix_length|lt: 8
+    bgp.as_path_length|gt: 6
+  condition: selection
+level: high
+falsepositives: [Legitimate route changes by ISPs]

@@ -1,0 +1,22 @@
+title: Python HTTP Server Started (Possible Staging/C2)
+id: 1a2b3c4d-0029-4000-8000-000000000029
+status: experimental
+description: Detects Python SimpleHTTPServer or http.server used for file staging
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1105]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'SimpleHTTPServer'
+      - 'http.server'
+      - 'HTTPServer'
+      - 'BaseHTTPRequestHandler'
+    CommandLine|contains:
+      - 'python'
+  condition: selection
+level: medium
+falsepositives: [Developers testing web apps]

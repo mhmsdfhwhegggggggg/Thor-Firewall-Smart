@@ -1,0 +1,24 @@
+title: Container Escape via cgroup v1
+id: 1a2b3c4d-0005-4000-8000-000000000005
+status: stable
+description: Detects container escape techniques using cgroup v1 release_agent
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1611/
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+logsource:
+  category: file_create
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - 'release_agent'
+      - '/sys/fs/cgroup'
+      - 'notify_on_release'
+  condition: selection
+level: critical
+falsepositives:
+  - Legitimate cgroup management

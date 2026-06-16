@@ -1,0 +1,22 @@
+title: AWS EC2 User Data Modified for Credential Exfiltration
+id: 3a2b3c4d-0021-4000-8000-000000000021
+status: experimental
+description: Detects modification of EC2 UserData that may contain credential exfiltration scripts
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1078.004]
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName: 'ModifyInstanceAttribute'
+    requestParameters.userData.value|contains:
+      - 'curl'
+      - 'wget'
+      - 'nc'
+      - '/etc/passwd'
+      - 'credentials'
+  condition: selection
+level: high
+falsepositives: [Authorized EC2 instance configuration]

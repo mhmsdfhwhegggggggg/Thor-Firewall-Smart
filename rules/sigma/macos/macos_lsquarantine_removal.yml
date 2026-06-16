@@ -1,0 +1,20 @@
+title: macOS Quarantine Attribute Removed
+id: 5a2b3c4d-0014-4000-8000-000000000014
+status: stable
+description: Detects removal of com.apple.quarantine xattr — allows running unsigned binaries
+author: Thor Security
+date: 2025/01/01
+tags: [attack.defense_evasion, attack.t1553.001]
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    Image|endswith: '/xattr'
+    CommandLine|contains:
+      - '-d com.apple.quarantine'
+      - '-c '
+      - '-r '
+  condition: selection
+level: medium
+falsepositives: [Developers running their own builds]

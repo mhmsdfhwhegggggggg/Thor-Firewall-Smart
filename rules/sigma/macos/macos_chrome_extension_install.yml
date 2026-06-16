@@ -1,0 +1,18 @@
+title: Suspicious Chrome Extension Installed (macOS)
+id: 5a2b3c4d-0008-4000-8000-000000000008
+status: experimental
+description: Detects installation of Chrome extensions from non-webstore sources
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1176]
+logsource:
+  category: file_event
+  product: macos
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/Library/Google/Chrome/Default/Extensions/'
+      - '/Users/*/Library/Application Support/Google/Chrome/Default/Extensions/'
+  condition: selection
+level: low
+falsepositives: [Legitimate Chrome extension installation]

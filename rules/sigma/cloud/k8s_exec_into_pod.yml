@@ -1,0 +1,30 @@
+title: Kubernetes Exec Into Pod
+id: 3a2b3c4d-0018-4000-8000-000000000018
+status: stable
+description: Detects kubectl exec commands into pods — common container breakout step
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1609/
+tags:
+  - attack.execution
+  - attack.t1609
+logsource:
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    verb: 'create'
+    subresource: 'exec'
+    objectRef.resource: 'pods'
+  selection_suspicious:
+    requestURI|contains:
+      - 'command=bash'
+      - 'command=sh'
+      - 'command=python'
+      - 'command=nc'
+      - 'command=curl'
+  condition: selection and selection_suspicious
+level: high
+falsepositives:
+  - Authorized debugging sessions

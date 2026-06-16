@@ -1,0 +1,25 @@
+title: Kubernetes Anonymous API Server Request
+id: 3a2b3c4d-0019-4000-8000-000000000019
+status: stable
+description: Detects unauthenticated (anonymous) requests to Kubernetes API server
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1190/
+tags:
+  - attack.initial_access
+  - attack.t1190
+logsource:
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    user.username: 'system:anonymous'
+    verb|contains:
+      - 'get'
+      - 'list'
+      - 'create'
+  condition: selection
+level: high
+falsepositives:
+  - Health check endpoints

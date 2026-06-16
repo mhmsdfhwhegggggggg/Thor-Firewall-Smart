@@ -1,0 +1,23 @@
+title: Backdoor via .bashrc / .bash_profile / .profile
+id: 1a2b3c4d-0056-4000-8000-000000000056
+status: stable
+description: Detects modification of shell startup files for persistence
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1546.004]
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/.bashrc'
+      - '/.bash_profile'
+      - '/.profile'
+      - '/.zshrc'
+      - '/.zprofile'
+      - '/.zshenv'
+      - '/.bash_login'
+  condition: selection
+level: medium
+falsepositives: [User shell customization]

@@ -1,0 +1,29 @@
+title: S3 Bucket Made Public or ACL Changed
+id: 3a2b3c4d-0004-4000-8000-000000000004
+status: stable
+description: Detects S3 bucket ACL/policy changes that expose data publicly
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1530/
+tags:
+  - attack.exfiltration
+  - attack.t1530
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName|contains:
+      - 'PutBucketAcl'
+      - 'PutBucketPolicy'
+      - 'DeleteBucketPolicy'
+    requestParameters|contains:
+      - 'public-read'
+      - 'public-read-write'
+      - 'AllUsers'
+      - 'AuthenticatedUsers'
+  condition: selection
+level: high
+falsepositives:
+  - Authorized static website hosting

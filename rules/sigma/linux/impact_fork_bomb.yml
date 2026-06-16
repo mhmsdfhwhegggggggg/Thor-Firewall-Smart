@@ -1,0 +1,20 @@
+title: Fork Bomb / Resource Exhaustion Attack
+id: 1a2b3c4d-0062-4000-8000-000000000062
+status: stable
+description: Detects fork bomb patterns causing denial of service
+author: Thor Security
+date: 2025/01/01
+tags: [attack.impact, attack.t1499.004]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - ':(){:|:&};:'
+      - ':(){ :|:& };:'
+      - 'ulimit -n unlimited'
+      - 'ulimit -u unlimited'
+  condition: selection
+level: critical
+falsepositives: [Unlikely — fork bomb is always malicious]

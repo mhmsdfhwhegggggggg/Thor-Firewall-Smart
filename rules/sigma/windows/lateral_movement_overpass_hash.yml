@@ -1,0 +1,23 @@
+title: Overpass-the-Hash / Pass-the-Ticket
+id: 2a2b3c4d-0018-4000-8000-000000000018
+status: stable
+description: Detects Overpass-the-Hash and Pass-the-Ticket attacks
+author: Thor Security
+date: 2025/01/01
+tags: [attack.lateral_movement, attack.t1550.003]
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection:
+    CommandLine|contains:
+      - 'sekurlsa::pth /aes256'
+      - 'Rubeus ptt'
+      - 'Rubeus.exe ptt'
+      - 'Invoke-Mimikatz.*pth'
+      - 'kerberos::ptt'
+      - 'kerbrute'
+      - '.kirbi'
+  condition: selection
+level: critical
+falsepositives: [Authorized penetration testing]

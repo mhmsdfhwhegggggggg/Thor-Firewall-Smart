@@ -1,0 +1,30 @@
+title: Suspicious DBus Method Call for Lateral Movement
+id: 1a2b3c4d-0006-4000-8000-000000000006
+status: experimental
+description: Detects use of gdbus or dbus-send to call privileged methods — used in privilege escalation
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1548/
+tags:
+  - attack.privilege_escalation
+  - attack.t1548
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith:
+      - '/gdbus'
+      - '/dbus-send'
+    CommandLine|contains:
+      - 'org.freedesktop.PolicyKit'
+      - 'org.freedesktop.login1'
+      - 'org.gnome.Shell'
+      - '--system'
+      - 'call '
+  condition: selection
+level: medium
+falsepositives:
+  - DBus administration tools
+  - System daemons

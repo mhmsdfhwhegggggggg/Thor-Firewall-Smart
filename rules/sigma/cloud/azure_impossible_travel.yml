@@ -1,0 +1,28 @@
+title: Azure AD Impossible Travel / Anomalous Sign-In
+id: 3a2b3c4d-0012-4000-8000-000000000012
+status: experimental
+description: Detects sign-ins from suspicious locations or after impossible travel
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1078/
+tags:
+  - attack.initial_access
+  - attack.t1078
+logsource:
+  product: azure
+  service: signinlogs
+detection:
+  selection:
+    riskLevelAggregated|contains:
+      - 'medium'
+      - 'high'
+    riskState: 'atRisk'
+    riskDetail|contains:
+      - 'impossibleTravel'
+      - 'unfamiliarFeatures'
+      - 'anonymizedIPAddress'
+  condition: selection
+level: high
+falsepositives:
+  - VPN usage, travel

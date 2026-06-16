@@ -1,0 +1,27 @@
+title: Kubernetes Privileged Container Created
+id: 3a2b3c4d-0016-4000-8000-000000000016
+status: stable
+description: Detects creation of privileged Kubernetes containers — can escape to host
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1611/
+tags:
+  - attack.privilege_escalation
+  - attack.t1611
+logsource:
+  product: kubernetes
+  service: audit
+detection:
+  selection:
+    verb: 'create'
+    objectRef.resource: 'pods'
+    requestObject.spec.containers|contains:
+      - '"privileged":true'
+      - '"hostPID":true'
+      - '"hostNetwork":true'
+      - '"hostIPC":true'
+  condition: selection
+level: critical
+falsepositives:
+  - Authorized privileged workloads (DaemonSets, etc.)

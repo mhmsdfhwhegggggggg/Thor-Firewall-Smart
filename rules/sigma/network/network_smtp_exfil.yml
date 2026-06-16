@@ -1,0 +1,19 @@
+title: SMTP Data Exfiltration via Direct Send
+id: 4a2b3c4d-0011-4000-8000-000000000011
+status: experimental
+description: Detects direct SMTP connections from workstations — potential data exfiltration
+author: Thor Security
+date: 2025/01/01
+tags: [attack.exfiltration, attack.t1048]
+logsource:
+  category: network_connection
+  product: windows
+detection:
+  selection:
+    DestinationPort: [25, 465, 587]
+    Initiated: 'true'
+  filter_mail_servers:
+    Image|contains: ['postfix', 'sendmail', 'Exchange', 'qmail', 'smtp']
+  condition: selection and not filter_mail_servers
+level: high
+falsepositives: [Email clients, newsletters, SMTP proxies]

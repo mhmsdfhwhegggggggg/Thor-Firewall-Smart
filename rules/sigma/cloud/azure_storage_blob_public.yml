@@ -1,0 +1,24 @@
+title: Azure Storage Blob Container Made Public
+id: 3a2b3c4d-0013-4000-8000-000000000013
+status: stable
+description: Detects Azure Blob containers changed to public access
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1530/
+tags:
+  - attack.exfiltration
+  - attack.t1530
+logsource:
+  product: azure
+  service: activitylog
+detection:
+  selection:
+    operationName: 'microsoft.storage/storageaccounts/blobservices/containers/write'
+    properties.requestBody|contains:
+      - '"publicAccess":"Blob"'
+      - '"publicAccess":"Container"'
+  condition: selection
+level: high
+falsepositives:
+  - Authorized static content hosting

@@ -1,0 +1,34 @@
+title: AWS IAM Privilege Escalation
+id: 3a2b3c4d-0002-4000-8000-000000000002
+status: stable
+description: Detects IAM policy modifications that grant excessive privileges
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1484/
+tags:
+  - attack.privilege_escalation
+  - attack.t1484
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName|contains:
+      - 'PutUserPolicy'
+      - 'PutGroupPolicy'
+      - 'PutRolePolicy'
+      - 'AttachUserPolicy'
+      - 'AttachGroupPolicy'
+      - 'AttachRolePolicy'
+      - 'CreatePolicy'
+      - 'SetDefaultPolicyVersion'
+  selection_admin:
+    requestParameters|contains:
+      - 'arn:aws:iam::aws:policy/AdministratorAccess'
+      - '"Effect":"Allow","Action":"*"'
+      - '"Action":["*"]'
+  condition: selection and selection_admin
+level: critical
+falsepositives:
+  - Authorized IAM administrators

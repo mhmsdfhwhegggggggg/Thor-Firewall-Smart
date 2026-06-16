@@ -1,0 +1,16 @@
+title: Cleartext Protocol Usage (Telnet/Rlogin/FTP)
+id: 4a2b3c4d-0012-4000-8000-000000000012
+status: stable
+description: Detects usage of legacy cleartext protocols for credential interception
+author: Thor Security
+date: 2025/01/01
+tags: [attack.credential_access, attack.t1040]
+logsource:
+  category: network_connection
+  product: linux
+detection:
+  selection:
+    dst_port: [23, 513, 514, 21, 69]
+  condition: selection
+level: medium
+falsepositives: [Legacy systems that require these protocols]

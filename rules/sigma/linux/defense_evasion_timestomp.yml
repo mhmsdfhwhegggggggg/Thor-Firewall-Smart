@@ -1,0 +1,21 @@
+title: Timestomping — File Timestamp Modification
+id: 1a2b3c4d-0034-4000-8000-000000000034
+status: stable
+description: Detects modification of file timestamps to cover tracks
+author: Thor Security
+date: 2025/01/01
+tags: [attack.defense_evasion, attack.t1070.006]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'touch -t'
+      - 'touch -m'
+      - 'touch -a'
+      - 'touch --timestamp'
+      - 'debugfs -w'
+  condition: selection
+level: medium
+falsepositives: [Backup tools, file synchronization]

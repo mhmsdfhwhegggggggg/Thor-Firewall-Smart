@@ -1,0 +1,22 @@
+title: Azure AD Global Administrator Role Assigned
+id: 3a2b3c4d-0009-4000-8000-000000000009
+status: stable
+description: Detects assignment of Global Administrator role in Azure AD
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1078/004/
+tags:
+  - attack.privilege_escalation
+  - attack.t1078.004
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName: 'Add member to role'
+    properties.targetResources|contains: 'Global Administrator'
+  condition: selection
+level: critical
+falsepositives:
+  - Authorized Azure AD administration

@@ -1,0 +1,23 @@
+title: Ansible Playbook Used for Command Execution
+id: 1a2b3c4d-0041-4000-8000-000000000041
+status: experimental
+description: Detects use of Ansible for remote command execution on production hosts
+author: Thor Security
+date: 2025/01/01
+tags: [attack.execution, attack.t1651]
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    Image|endswith: ['/ansible', '/ansible-playbook']
+    CommandLine|contains:
+      - '-m shell'
+      - '-m command'
+      - '-m raw'
+      - 'shell:'
+      - 'command:'
+      - 'raw:'
+  condition: selection
+level: medium
+falsepositives: [Authorized Ansible automation]

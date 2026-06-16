@@ -1,0 +1,26 @@
+title: Process Injection via ptrace
+id: 1a2b3c4d-0003-4000-8000-000000000003
+status: stable
+description: Detects process injection using ptrace syscall — common in Linux process hollowing
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1055/008/
+tags:
+  - attack.defense_evasion
+  - attack.t1055.008
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'ptrace'
+      - 'PTRACE_ATTACH'
+      - 'PTRACE_POKETEXT'
+      - 'PTRACE_POKEDATA'
+  condition: selection
+level: high
+falsepositives:
+  - Debuggers (gdb, strace)
+  - Security monitoring tools

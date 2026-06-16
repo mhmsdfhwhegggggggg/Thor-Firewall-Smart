@@ -1,0 +1,20 @@
+title: macOS Sudo Token Hijacking
+id: 5a2b3c4d-0013-4000-8000-000000000013
+status: experimental
+description: Detects CVE-2022-22583 and similar sudo token abuse on macOS
+author: Thor Security
+date: 2025/01/01
+tags: [attack.privilege_escalation, attack.t1548.003]
+logsource:
+  category: process_creation
+  product: macos
+detection:
+  selection:
+    CommandLine|contains:
+      - 'sudo -n'
+      - 'sudo --stdin'
+      - 'sudo -A'
+      - 'SUDO_ASKPASS='
+  condition: selection
+level: medium
+falsepositives: [Automation scripts using sudo]

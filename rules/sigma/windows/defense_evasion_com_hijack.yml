@@ -1,0 +1,20 @@
+title: COM Object Hijacking via HKCU Registry
+id: 2a2b3c4d-0014-4000-8000-000000000014
+status: stable
+description: Detects COM hijacking by registering objects in HKCU\Software\Classes\CLSID
+author: Thor Security
+date: 2025/01/01
+tags: [attack.defense_evasion, attack.t1546.015]
+logsource:
+  category: registry_set
+  product: windows
+detection:
+  selection:
+    TargetObject|contains:
+      - 'HKCU\Software\Classes\CLSID\'
+    TargetObject|endswith:
+      - '\InprocServer32'
+      - '\LocalServer32'
+  condition: selection
+level: high
+falsepositives: [Legitimate application COM registration]

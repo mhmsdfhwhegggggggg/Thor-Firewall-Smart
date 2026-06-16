@@ -1,0 +1,35 @@
+title: Suspicious Kernel Module Loaded
+id: 1a2b3c4d-0001-4000-8000-000000000001
+status: stable
+description: Detects loading of kernel modules via insmod/modprobe — common rootkit installation technique
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1547/006/
+tags:
+  - attack.persistence
+  - attack.t1547.006
+  - attack.defense_evasion
+  - attack.t1014
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection:
+    CommandLine|contains:
+      - 'insmod '
+      - 'modprobe '
+      - 'rmmod '
+  filter_legit:
+    CommandLine|contains:
+      - 'sound'
+      - 'bluetooth'
+      - 'wifi'
+      - 'video'
+      - 'nvidia'
+      - 'vbox'
+      - 'vmware'
+  condition: selection and not filter_legit
+level: high
+falsepositives:
+  - System administrators loading legitimate kernel modules

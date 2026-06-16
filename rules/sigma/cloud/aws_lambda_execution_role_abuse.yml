@@ -1,0 +1,26 @@
+title: AWS Lambda Execution Role Over-Privileged
+id: 3a2b3c4d-0007-4000-8000-000000000007
+status: experimental
+description: Detects Lambda function creation with overly permissive execution roles
+author: Thor Security
+date: 2025/01/01
+references:
+  - https://attack.mitre.org/techniques/T1578/
+tags:
+  - attack.privilege_escalation
+  - attack.t1578
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName|contains:
+      - 'CreateFunction'
+      - 'UpdateFunctionConfiguration'
+    requestParameters|contains:
+      - 'AdministratorAccess'
+      - '"Action":"*"'
+  condition: selection
+level: high
+falsepositives:
+  - Authorized Lambda deployments

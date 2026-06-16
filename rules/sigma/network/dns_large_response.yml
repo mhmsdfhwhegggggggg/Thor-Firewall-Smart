@@ -1,0 +1,17 @@
+title: Unusually Large DNS Response (Data Exfiltration)
+id: 4a2b3c4d-0006-4000-8000-000000000006
+status: experimental
+description: Detects large DNS TXT/NULL responses used for data exfiltration
+author: Thor Security
+date: 2025/01/01
+tags: [attack.exfiltration, attack.t1048.003]
+logsource:
+  category: dns
+  product: zeek
+detection:
+  selection:
+    dns.qtype|contains: ['TXT', 'NULL', 'CNAME', 'MX']
+    dns.response_size|gt: 512
+  condition: selection
+level: medium
+falsepositives: [SPF/DKIM/DMARC TXT records, legitimate MX records]

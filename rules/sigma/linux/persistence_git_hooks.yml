@@ -1,0 +1,21 @@
+title: Git Hook Persistence Backdoor
+id: 1a2b3c4d-0035-4000-8000-000000000035
+status: stable
+description: Detects backdoors placed in Git hooks for persistent execution
+author: Thor Security
+date: 2025/01/01
+tags: [attack.persistence, attack.t1546]
+logsource:
+  category: file_event
+  product: linux
+detection:
+  selection:
+    TargetFilename|contains:
+      - '/.git/hooks/pre-commit'
+      - '/.git/hooks/post-commit'
+      - '/.git/hooks/pre-push'
+      - '/.git/hooks/post-merge'
+      - '/.git/hooks/post-checkout'
+  condition: selection
+level: medium
+falsepositives: [Legitimate git hooks for CI/CD]

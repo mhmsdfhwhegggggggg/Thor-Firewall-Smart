@@ -1,0 +1,21 @@
+title: IPv6 Tunnel Abuse (6in4, Teredo, ISATAP)
+id: 4a2b3c4d-0023-4000-8000-000000000023
+status: experimental
+description: Detects IPv6 tunneling protocols used to bypass network controls
+author: Thor Security
+date: 2025/01/01
+tags: [attack.command_and_control, attack.t1572]
+logsource:
+  category: network
+  product: zeek
+detection:
+  selection:
+    protocol: 41
+  selection2:
+    dst_ip|contains:
+      - '2001::'
+      - 'fe80::'
+    dst_port: [3544, 9999, 10000]
+  condition: selection or selection2
+level: medium
+falsepositives: [Legitimate IPv6 transition mechanisms]

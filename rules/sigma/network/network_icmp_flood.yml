@@ -1,0 +1,16 @@
+title: ICMP Flood / DDoS Indicator
+id: 4a2b3c4d-0022-4000-8000-000000000022
+status: stable
+description: Detects ICMP flood patterns used for DDoS or network disruption
+author: Thor Security
+date: 2025/01/01
+tags: [attack.impact, attack.t1498.001]
+logsource:
+  category: network
+  product: zeek
+detection:
+  selection:
+    icmp.type: 8
+  condition: selection | count() by src_ip > 100
+level: high
+falsepositives: [Network monitoring tools, authorized stress testing]
