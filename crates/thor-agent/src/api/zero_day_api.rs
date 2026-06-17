@@ -309,6 +309,114 @@ pub async fn get_status(
     )
 }
 
+// ─── AI / Axis-4 handlers ─────────────────────────────────────────────────────
+
+use crate::ml::ueba::{UebaEngine, EntityId};
+use crate::ml::campaign_correlator::CampaignCorrelator;
+use crate::ml::kill_chain::KillChainPredictor;
+
+/// Shared Axis-4 AI state — injected via Axum extension.
+pub struct Axis4AiState {
+    pub ueba:       Arc<UebaEngine>,
+    pub campaigns:  Arc<CampaignCorrelator>,
+    pub predictor:  Arc<KillChainPredictor>,
+}
+
+impl Axis4AiState {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            ueba:      Arc::new(UebaEngine::new()),
+            campaigns: Arc::new(CampaignCorrelator::new()),
+            predictor: Arc::new(KillChainPredictor::new()),
+        })
+    }
+}
+
+// ─── Handler: GET /api/v1/ai/ueba/summary ──────────────────────────────────
+
+pub async fn get_ueba_summary(
+    Extension(state): Extension<Arc<Axis4AiState>>,
+) -> impl IntoResponse {
+    let scores = state.ueba.risk_scores();
+    let total  = scores.len();
+    let high_risk: Vec<_> = scores.iter()
+        .filter(|(_, score, _)| *score > 0.70)
+        .map(|(eid, score, count)| serde_json::json!({
+            "entity_id":    eid.to_string(),
+            "risk_score":   score,
+            "event_count":  count,
+        }))
+        .collect();
+
+    info!("GET /api/v1/ai/ueba/summary → {} entities, {} high-risk", total, high_risk.len());
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "total_entities": total,
+            "high_risk_count": high_risk.len(),
+            "high_risk_entities": high_risk,
+        })),
+    )
+}
+
+// ─── Handler: GET /api/v1/ai/campaigns ─────────────────────────────────────
+
+pub async fn get_campaigns(
+    Extension(state): Extension<Arc<Axis4AiState>>,
+) -> impl IntoResponse {
+    let campaigns = state.campaigns.active_campaigns();
+    let count = campaigns.len();
+
+    info!("GET /api/v1/ai/campaigns → {} active campaigns", count);
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "count":     count,
+            "campaigns": campaigns,
+        })),
+    )
+}
+
+// ─── Handler: GET /api/v1/ai/killchain ─────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct KillChainQuery {
+    /// Optional: only return prediction for this campaign ID.
+    pub campaign_id: Option<String>,
+}
+
+pub async fn get_kill_chain(
+    Extension(state): Extension<Arc<Axis4AiState>>,
+    Query(query):     Query<KillChainQuery>,
+) -> impl IntoResponse {
+    let campaigns = if let Some(ref cid) = query.campaign_id {
+        match state.campaigns.get_campaign(cid) {
+            Some(c) => vec![c],
+            None    => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "error": format!("Campaign {} not found", cid) })),
+                ).into_response();
+            }
+        }
+    } else {
+        state.campaigns.active_campaigns()
+    };
+
+    let predictions: Vec<_> = campaigns.iter()
+        .map(|c| state.predictor.predict(c))
+        .collect();
+
+    info!("GET /api/v1/ai/killchain → {} prediction(s)", predictions.len());
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "count":       predictions.len(),
+            "predictions": predictions,
+        })),
+    ).into_response()
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

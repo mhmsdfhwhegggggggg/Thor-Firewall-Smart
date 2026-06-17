@@ -5,7 +5,14 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize}; 
 use std::time::Duration; 
 use tracing::{info, warn}; 
-use crate::detection::DetectionResult; 
+/// Local definition — mirrors relevant fields from the detection engine.
+#[derive(Debug)]
+pub struct DetectionResult {
+    pub threat_level:         thor_common::ThreatLevel,
+    pub confidence_score:     f64,
+    pub matched_sigma_rules:  Vec<String>,
+}
+
 
 #[derive(Serialize)] 
 struct OllamaRequest { 

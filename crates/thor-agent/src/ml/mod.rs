@@ -10,6 +10,9 @@ pub mod llm_reporter;
 pub mod malware_classifier;
 pub mod onnx_scorer;
 pub mod timeseries_anomaly;
+pub mod ueba;
+pub mod campaign_correlator;
+pub mod kill_chain;
 
 use anyhow::Result;
 use std::path::Path;

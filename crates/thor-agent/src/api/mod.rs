@@ -46,6 +46,8 @@ use forensics_api::{
 use zero_day_api::{
     get_profiles, ingest_event, get_alerts, get_drift, get_status,
     ZeroDayApiState,
+    get_ueba_summary, get_campaigns, get_kill_chain,
+    Axis4AiState,
 };
 
 // ─── Shared API state ─────────────────────────────────────────────────────────
@@ -70,6 +72,7 @@ pub async fn start_api_server(addr: SocketAddr, api_state: ApiState) {
     // Initialise the zero-day engine and API state
     let zero_day_engine = Arc::new(crate::detection::zero_day::ZeroDayEngine::new());
     let zd_state        = ZeroDayApiState::new(zero_day_engine);
+    let ai4_state       = Axis4AiState::new();
 
     let app = Router::new()
         // ── Public routes ─────────────────────────────────────────────────────
@@ -111,6 +114,14 @@ pub async fn start_api_server(addr: SocketAddr, api_state: ApiState) {
         .route("/api/v1/zeroday/ingest",
             post(ingest_event).route_layer(middleware::from_fn(require_admin_auth)))
 
+        // ── AI Axis-4 routes — UEBA / Campaigns / Kill-Chain ─────────────────
+        .route("/api/v1/ai/ueba/summary",
+            get(get_ueba_summary).route_layer(middleware::from_fn(require_analyst_auth)))
+        .route("/api/v1/ai/campaigns",
+            get(get_campaigns).route_layer(middleware::from_fn(require_analyst_auth)))
+        .route("/api/v1/ai/killchain",
+            get(get_kill_chain).route_layer(middleware::from_fn(require_analyst_auth)))
+
         // ── Admin routes ──────────────────────────────────────────────────────
         .route("/api/v1/rules/inject",
             post(handlers::inject_rule).route_layer(middleware::from_fn(require_admin_auth)))
@@ -128,6 +139,7 @@ pub async fn start_api_server(addr: SocketAddr, api_state: ApiState) {
         .layer(axum::Extension(api_state.metrics.clone()))
         .layer(axum::Extension(api_state.siem.clone()))
         .layer(axum::Extension(zd_state))
+        .layer(axum::Extension(ai4_state))
         .layer(middleware::from_fn(rate_limit_api))
         .layer(cors)
         .layer(TraceLayer::new_for_http());

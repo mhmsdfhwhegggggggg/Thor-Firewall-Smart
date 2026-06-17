@@ -35,6 +35,9 @@ pub mod syscall_profiler;
 pub mod anomaly_engine;
 pub mod exploit_primitives;
 pub mod behavioral_baseline;
+pub mod kernel_exploit;
+pub mod process_hollowing;
+pub mod network_covert;
 
 use std::sync::Arc;
 use anyhow::Result;
@@ -45,6 +48,9 @@ pub use syscall_profiler::{SyscallEvent, SyscallProfiler, ProcessProfile};
 pub use anomaly_engine::{AnomalyEngine, FeatureVector, AnomalyScore};
 pub use exploit_primitives::{ExploitPrimitiveDetector, ExploitAlert, ExploitType};
 pub use behavioral_baseline::{BehavioralBaseline, BaselineDrift};
+pub use kernel_exploit::{KernelExploitDetector, KernelExploitAlert, KernelExploitType};
+pub use process_hollowing::{ProcessHollowingDetector, HollowingAlert, HollowingType};
+pub use network_covert::{NetworkCovertDetector, CovertChannelAlert, CovertChannelType};
 
 // ─── Zero-Day Alert ───────────────────────────────────────────────────────────
 
