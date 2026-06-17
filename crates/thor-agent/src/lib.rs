@@ -32,6 +32,11 @@ pub mod config;
 // ── Axis 3 convenience re-exports ─────────────────────────────────────────────
 pub use forensics::{artifacts, collector, memory_scanner, thorql};
 
+// ── Phase 3 Axis 1: Sequence Detector re-exports ──────────────────────────────
+pub use detection::sequence_detector::{
+    SequenceDetector, SequenceRule, SequenceStage, StagePredicate, EntityField,
+};
+
 // ── Axis 4 convenience re-exports ─────────────────────────────────────────────
 pub use detection::zero_day::{
     ZeroDayEngine, ZeroDayAlert, ZeroDaySeverity, DetectionMethod,

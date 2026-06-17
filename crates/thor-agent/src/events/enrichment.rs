@@ -16,6 +16,49 @@ pub struct EnrichedEvent {
     pub is_internal:  bool,
     /// Whether src/dst IP or domain matched an IOC entry
     pub ioc_matched:  bool,
+
+    // ── Phase 3 Axis 1: Sequence Detection enrichment fields ──────────────
+    // These are populated by higher-level event parsers (Sysmon, Windows
+    // Security Log, Linux audit) before events reach the SequenceDetector.
+    // They remain `None` for raw eBPF events that lack this context.
+
+    /// Full command line of the spawned process
+    pub command_line:  Option<String>,
+    /// Process executable name (basename of image path)
+    pub process_name:  Option<String>,
+    /// Logical event type string, e.g. "process_create", "network_connect"
+    pub event_type:    Option<String>,
+    /// OS user / UID that executed the action
+    pub user_id:       Option<String>,
+    /// Process ID of the subject process
+    pub pid:           Option<u32>,
+}
+
+impl Default for EnrichedEvent {
+    fn default() -> Self {
+        use crate::events::RawEvent;
+        // Minimal stub used by unit/integration tests that don't exercise the
+        // full eBPF pipeline. The `raw` field requires a concrete variant;
+        // we use a zero-value XdpDrop as the lightest-weight option.
+        Self {
+            raw:          RawEvent::XdpDrop {
+                src_ip: 0, dst_ip: 0, src_port: 0, dst_port: 0,
+                reason: 0, timestamp_ns: 0,
+            },
+            hostname:     None,
+            src_ip_str:   None,
+            dst_ip_str:   None,
+            country_code: None,
+            asn:          None,
+            is_internal:  true,
+            ioc_matched:  false,
+            command_line:  None,
+            process_name:  None,
+            event_type:    None,
+            user_id:       None,
+            pid:           None,
+        }
+    }
 }
 
 pub struct EventEnricher {
@@ -68,6 +111,13 @@ impl EventEnricher {
             asn: None,
             is_internal,
             ioc_matched,
+            // Phase 3 Axis 1 fields — populated by higher-level parsers,
+            // not the raw eBPF enricher path.
+            command_line: None,
+            process_name: None,
+            event_type:   None,
+            user_id:      None,
+            pid:          None,
         }
     }
 }

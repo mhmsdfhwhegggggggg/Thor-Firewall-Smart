@@ -1,12 +1,19 @@
 //! Detection Engine — unified threat detection:
 //! Sigma (condition-aware), YARA, IOC, ML/ONNX, IDS (Suricata-compatible), FIM
-//! Axis 4 Zero-Day Detection (behavioral anomaly + exploit primitive heuristics)
+//! Phase 3 Axis 1: Behavioral Sigma Sequence Detection (multi-stage attack chains)
+//! Phase 4: Zero-Day Detection (behavioral anomaly + exploit primitive heuristics)
 
 pub mod ioc_check;
 pub mod sigma;
 pub mod sigma_compiler;
 pub mod yara;
 pub mod zero_day;
+/// Phase 3 Axis 1 — multi-stage behavioral sequence detection engine
+pub mod sequence_detector;
+
+pub use sequence_detector::{
+    SequenceDetector, SequenceRule, SequenceStage, StagePredicate, EntityField,
+};
 
 use std::path::Path;
 use std::sync::Arc;
