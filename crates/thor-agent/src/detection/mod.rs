@@ -1,10 +1,12 @@
 //! Detection Engine — unified threat detection:
 //! Sigma (condition-aware), YARA, IOC, ML/ONNX, IDS (Suricata-compatible), FIM
+//! Axis 4 Zero-Day Detection (behavioral anomaly + exploit primitive heuristics)
 
 pub mod ioc_check;
 pub mod sigma;
 pub mod sigma_compiler;
 pub mod yara;
+pub mod zero_day;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -32,9 +34,9 @@ pub struct DetectionEngine {
 impl DetectionEngine {
     pub fn new(
         sigma_rules_dir: &Path,
-        yara_rules_dir: &Path,
-        ids_rules_dir: &Path,
-        ml: Arc<MlEngine>,
+        yara_rules_dir:  &Path,
+        ids_rules_dir:   &Path,
+        ml:              Arc<MlEngine>,
     ) -> Result<Self> {
         let sigma = SigmaEngine::load(sigma_rules_dir)
             .map_err(|e| { warn!("Sigma load error: {}", e); e })?;
@@ -43,7 +45,6 @@ impl DetectionEngine {
             .map_err(|e| { warn!("YARA load error: {}", e); e })?;
 
         let ioc_checker = IocChecker::new();
-
         let ids = Arc::new(IdsEngine::load_from_dir(ids_rules_dir));
 
         info!(
@@ -70,8 +71,7 @@ impl DetectionEngine {
         }
 
         // 3. IDS rules (Suricata-compatible)
-        let ids_alerts = self.ids.scan(event);
-        alerts.extend(ids_alerts);
+        alerts.extend(self.ids.scan(event));
 
         // 4. YARA scan (CPU-heavy — run in spawn_blocking)
         let yara_alerts = tokio::task::spawn_blocking({
@@ -93,8 +93,7 @@ impl DetectionEngine {
                     threat_level: ThreatLevel::from_score(score),
                     description: format!(
                         "ML anomaly score: {:.3} (threshold: 0.70) — {}",
-                        score,
-                        classify_anomaly(score)
+                        score, classify_anomaly(score)
                     ),
                     pid: None,
                     process_name: None,
@@ -117,8 +116,8 @@ impl DetectionEngine {
 }
 
 fn classify_anomaly(score: f32) -> &'static str {
-    if score >= 0.95 { "Likely attack in progress" }
+    if score >= 0.95      { "Likely attack in progress" }
     else if score >= 0.85 { "Highly suspicious behavior" }
     else if score >= 0.70 { "Anomalous activity" }
-    else { "Low anomaly" }
+    else                  { "Low anomaly" }
 }
