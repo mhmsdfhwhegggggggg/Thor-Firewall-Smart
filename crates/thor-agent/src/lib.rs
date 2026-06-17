@@ -1,15 +1,19 @@
 //! Thor Agent — library interface for integration testing and forensics modules.
 //!
-//! This lib exposes the forensics module (Axis 3) for use in integration tests
-//! in `tests/forensics_tests.rs`.  The binary entry point remains `src/main.rs`.
+//! This lib exposes the forensics module (Axis 3) and zero-day detection
+//! module (Axis 4) for use in integration tests.
+//! The binary entry point remains `src/main.rs`.
 
-// Allow integration tests to access forensics sub-modules
+// Axis 3: Digital Forensics and Incident Response
 pub mod forensics;
 
-// Re-export state and events for tests that need them
+// Axis 4: Zero-Day Detection Engine
+// (exposed via detection::zero_day sub-module)
+pub mod detection;
+
+// Core infrastructure modules
 pub mod state;
 pub mod events;
-pub mod detection;
 pub mod soar;
 pub mod ml;
 pub mod api;
@@ -25,5 +29,14 @@ pub mod fim;
 pub mod ebpf;
 pub mod config;
 
-// Allow the binary to use the same module tree
+// ── Axis 3 convenience re-exports ─────────────────────────────────────────────
 pub use forensics::{artifacts, collector, memory_scanner, thorql};
+
+// ── Axis 4 convenience re-exports ─────────────────────────────────────────────
+pub use detection::zero_day::{
+    ZeroDayEngine, ZeroDayAlert, ZeroDaySeverity, DetectionMethod,
+    SyscallProfiler, SyscallEvent, ProcessProfile,
+    AnomalyEngine, FeatureVector, AnomalyScore,
+    ExploitPrimitiveDetector, ExploitAlert, ExploitType,
+    BehavioralBaseline, BaselineDrift,
+};
