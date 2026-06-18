@@ -124,8 +124,11 @@ message HeartbeatResponse {
 message ModelWeightUpdate {
     string agent_id = 1;
     string model_version = 2;
-    bytes weights = 3;  // Securely uploaded gradient deltas
-    int32 sample_size = 4;
+    string model_type = 3; // e.g., "isolation_forest", "autoencoder"
+    bytes weights = 4;  // Securely uploaded gradient deltas
+    int32 sample_size = 5;
+    double local_accuracy = 6;
+    map<string, double> feature_importance = 7;
 }
 
 message ModelWeightAck {
