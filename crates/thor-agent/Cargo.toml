@@ -70,6 +70,7 @@ reqwest           = { version = "0.12", features = ["json", "rustls-tls", "gzip"
 aya-log           = "0.2"
 bytes             = "1.5"
 num_cpus          = "1.16"
+rand              = "0.8"
 
 # ── NEW: Phase 5 DB Persistence additions (sqlx) ────────────────────────────
 sqlx              = { version = "0.8", features = ["postgres", "runtime-tokio-rustls", "migrate", "uuid", "chrono", "json"] }

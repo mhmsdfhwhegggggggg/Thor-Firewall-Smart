@@ -2,49 +2,80 @@
 //!
 //! The profiler maintains a sliding-window histogram of syscall calls per
 //! process.  Each `SyscallEvent` (produced either by the eBPF ring buffer or
-//! a synthetic source in tests) updates:
+//! a synthetic source in tests) updates the full 24-dimensional feature space
+//! used by the AnomalyEngine and all sub-detectors.
 //!
-//! * Per-syscall call counts (raw histogram).
-//! * Exponential moving averages of call rates.
-//! * Child-spawn rate (execve/clone/fork counts).
-//! * Memory allocation rate (mmap/brk/mprotect counts).
-//! * Network byte counters (read/write/sendmsg/recvmsg on sockets).
-//! * Write entropy estimate (updated with each file-write event).
-//!
-//! The resulting `ProcessProfile` is used as input to the `AnomalyEngine`
-//! and `ExploitPrimitiveDetector`.
+//! # New in v2
+//! * Tracking for bpf(), io_uring, userfaultfd, pidfd_open (2022-2024 attack vectors)
+//! * Cross-process write counter (process_vm_writev / ptrace)
+//! * Privilege syscall ratio
+//! * DashMap for lock-free concurrent access under high event load
 
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
+use std::collections::VecDeque;
 
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 // ─── Syscall numbers (Linux x86-64) ──────────────────────────────────────────
 
-pub const SYS_READ:      u32 = 0;
-pub const SYS_WRITE:     u32 = 1;
-pub const SYS_OPEN:      u32 = 2;
-pub const SYS_MMAP:      u32 = 9;
-pub const SYS_MPROTECT:  u32 = 10;
-pub const SYS_MUNMAP:    u32 = 11;
-pub const SYS_BRK:       u32 = 12;
-pub const SYS_IOCTL:     u32 = 16;
-pub const SYS_SENDMSG:   u32 = 46;
-pub const SYS_RECVMSG:   u32 = 47;
-pub const SYS_FORK:      u32 = 57;
-pub const SYS_VFORK:     u32 = 58;
-pub const SYS_EXECVE:    u32 = 59;
-pub const SYS_SOCKET:    u32 = 41;
-pub const SYS_CONNECT:   u32 = 42;
-pub const SYS_CLONE:     u32 = 56;
-pub const SYS_PTRACE:    u32 = 101;
-pub const SYS_INIT_MODULE: u32 = 175;
-pub const SYS_CREATE_MODULE: u32 = 174;
+pub const SYS_READ:             u32 = 0;
+pub const SYS_WRITE:            u32 = 1;
+pub const SYS_OPEN:             u32 = 2;
+pub const SYS_MMAP:             u32 = 9;
+pub const SYS_MPROTECT:         u32 = 10;
+pub const SYS_MUNMAP:           u32 = 11;
+pub const SYS_BRK:              u32 = 12;
+pub const SYS_IOCTL:            u32 = 16;
+pub const SYS_SENDMSG:          u32 = 46;
+pub const SYS_RECVMSG:          u32 = 47;
+pub const SYS_FORK:             u32 = 57;
+pub const SYS_VFORK:            u32 = 58;
+pub const SYS_EXECVE:           u32 = 59;
+pub const SYS_SOCKET:           u32 = 41;
+pub const SYS_CONNECT:          u32 = 42;
+pub const SYS_CLONE:            u32 = 56;
+pub const SYS_PTRACE:           u32 = 101;
+pub const SYS_INIT_MODULE:      u32 = 175;
+pub const SYS_FINIT_MODULE:     u32 = 313;
+pub const SYS_CREATE_MODULE:    u32 = 174;
 pub const SYS_PROCESS_VM_READV: u32 = 310;
-pub const SYS_PROCESS_VM_WRITEV: u32 = 311;
-pub const SYS_MEMFD_CREATE: u32 = 319;
+pub const SYS_PROCESS_VM_WRITEV:u32 = 311;
+pub const SYS_MEMFD_CREATE:     u32 = 319;
+
+// ── New critical syscalls (2022-2024 attack vectors) ─────────────────────────
+pub const SYS_BPF:              u32 = 321;  // eBPF rootkits
+pub const SYS_IO_URING_SETUP:   u32 = 425;  // io_uring privilege escalation
+pub const SYS_IO_URING_ENTER:   u32 = 426;  // io_uring kernel exploit
+pub const SYS_IO_URING_REGISTER:u32 = 427;  // io_uring registration
+pub const SYS_USERFAULTFD:      u32 = 323;  // userfaultfd kernel exploit
+pub const SYS_PIDFD_OPEN:       u32 = 434;  // pidfd cross-process operations
+pub const SYS_PIDFD_SEND_SIGNAL:u32 = 424;  // pidfd signal injection
+pub const SYS_PERF_EVENT_OPEN:  u32 = 298;  // Spectre/Meltdown side-channel
+pub const SYS_SETUID:           u32 = 105;  // privilege escalation
+pub const SYS_SETGID:           u32 = 106;
+pub const SYS_SETRESUID:        u32 = 117;
+pub const SYS_SETRESGID:        u32 = 119;
+pub const SYS_CAPSET:           u32 = 126;  // capability manipulation
+pub const SYS_UNSHARE:          u32 = 272;  // container escape
+pub const SYS_SETNS:            u32 = 308;  // namespace escape
+pub const SYS_PIVOT_ROOT:       u32 = 155;  // container escape
+pub const SYS_MOUNT:            u32 = 165;  // container escape
+pub const SYS_KEYCTL:           u32 = 250;  // kernel keyring theft
+pub const SYS_PRCTL:            u32 = 157;  // security disablement
+pub const SYS_SHMGET:           u32 = 29;   // shared memory (atom bombing)
+pub const SYS_SHMAT:            u32 = 30;   // shared memory attach
+
+/// Set of privilege-escalation / high-risk syscall numbers for fast lookup.
+const PRIV_SYSCALLS: &[u32] = &[
+    SYS_PTRACE, SYS_INIT_MODULE, SYS_FINIT_MODULE, SYS_CREATE_MODULE,
+    SYS_PROCESS_VM_READV, SYS_PROCESS_VM_WRITEV, SYS_MEMFD_CREATE,
+    SYS_BPF, SYS_IO_URING_SETUP, SYS_IO_URING_ENTER, SYS_IO_URING_REGISTER,
+    SYS_USERFAULTFD, SYS_PIDFD_OPEN, SYS_PIDFD_SEND_SIGNAL,
+    SYS_SETUID, SYS_SETGID, SYS_SETRESUID, SYS_SETRESGID,
+    SYS_CAPSET, SYS_UNSHARE, SYS_SETNS, SYS_PIVOT_ROOT, SYS_KEYCTL,
+];
 
 // ─── SyscallEvent ─────────────────────────────────────────────────────────────
 
@@ -60,12 +91,15 @@ pub struct SyscallEvent {
     /// Return value (−errno on failure, otherwise syscall-specific).
     pub ret_val:    i64,
     /// Byte count for read/write/send/recv syscalls (0 otherwise).
+    /// Also reused for mmap prot flags when syscall_nr == SYS_MMAP.
     pub byte_count: u64,
     /// Monotonic timestamp in nanoseconds (from ktime_get_ns()).
     pub ts_ns:      u64,
     /// Process name from task_comm (max 16 bytes, NUL-padded).
     pub comm:       String,
-    /// Whether this is a kernel-space event (false = userspace).
+    /// UID of the calling process (0 = root).
+    pub uid:        u32,
+    /// Whether this is a kernel-space event.
     pub is_kernel:  bool,
 }
 
@@ -79,56 +113,89 @@ impl SyscallEvent {
             byte_count: 0,
             ts_ns:      0,
             comm:       comm.to_string(),
+            uid:        1000,
             is_kernel:  false,
         }
     }
 
     pub fn is_exec_event(&self) -> bool {
-        matches!(self.syscall_nr, n if n == SYS_EXECVE || n == SYS_FORK || n == SYS_VFORK || n == SYS_CLONE)
+        matches!(self.syscall_nr,
+            n if n == SYS_EXECVE || n == SYS_FORK || n == SYS_VFORK || n == SYS_CLONE)
     }
 
     pub fn is_memory_event(&self) -> bool {
-        matches!(self.syscall_nr, n if n == SYS_MMAP || n == SYS_MPROTECT || n == SYS_BRK || n == SYS_MUNMAP)
+        matches!(self.syscall_nr,
+            n if n == SYS_MMAP || n == SYS_MPROTECT || n == SYS_BRK || n == SYS_MUNMAP)
     }
 
     pub fn is_dangerous(&self) -> bool {
-        matches!(self.syscall_nr, n if
-            n == SYS_PTRACE || n == SYS_INIT_MODULE || n == SYS_CREATE_MODULE ||
-            n == SYS_PROCESS_VM_READV || n == SYS_PROCESS_VM_WRITEV || n == SYS_MEMFD_CREATE)
+        PRIV_SYSCALLS.contains(&self.syscall_nr)
+    }
+
+    /// Returns true if this syscall is a 2022-2024 generation attack vector.
+    pub fn is_modern_attack_vector(&self) -> bool {
+        matches!(self.syscall_nr,
+            SYS_BPF | SYS_IO_URING_SETUP | SYS_IO_URING_ENTER |
+            SYS_IO_URING_REGISTER | SYS_USERFAULTFD | SYS_PIDFD_OPEN |
+            SYS_PIDFD_SEND_SIGNAL)
     }
 }
 
 // ─── ProcessProfile ───────────────────────────────────────────────────────────
 
-/// Behavioral profile for a single process.
+/// Behavioral profile for a single process — 24-dimensional feature space.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessProfile {
-    /// Process ID.
-    pub pid: u32,
-    /// Process name (comm).
-    pub process_name: String,
-    /// Total syscall events seen for this process.
-    pub event_count: u64,
-    /// Per-syscall call counts (syscall_nr → count).
-    pub syscall_counts: HashMap<u32, u64>,
-    /// Number of unique syscall numbers seen.
-    pub unique_syscall_count: usize,
-    /// Exponential moving average of syscalls per second.
-    pub syscall_rate_ema: f64,
-    /// Total child processes spawned (exec/fork/clone).
-    pub child_spawns: u64,
-    /// Total memory allocation events (mmap/brk/mprotect).
-    pub memory_alloc_events: u64,
-    /// Total bytes transferred (read + write + send + recv).
-    pub total_network_bytes: u64,
-    /// Running write entropy estimate [0.0, 1.0].
-    pub write_entropy_estimate: f64,
-    /// Count of dangerous syscalls seen (ptrace, init_module, etc.).
+    pub pid:                     u32,
+    pub process_name:            String,
+    pub event_count:             u64,
+    pub syscall_counts:          std::collections::HashMap<u32, u64>,
+    pub unique_syscall_count:    usize,
+    pub syscall_rate_ema:        f64,
+    pub child_spawns:            u64,
+    pub memory_alloc_events:     u64,
+    pub total_network_bytes:     u64,
+    pub write_entropy_estimate:  f64,
     pub dangerous_syscall_count: u64,
-    /// Observation window duration.
-    pub window_start: Option<Instant>,
-    /// Last event time (for rate calculations).
-    pub last_event_ts: Option<Instant>,
+    // ── New tracking fields (v2) ──────────────────────────────────────────────
+    /// bpf() syscall count — eBPF rootkit staging
+    pub bpf_call_count:          u64,
+    /// io_uring syscall count — kernel exploit vector
+    pub io_uring_count:          u64,
+    /// userfaultfd() count — kernel exploit via fault handler
+    pub userfaultfd_count:       u64,
+    /// pidfd_open + pidfd_send_signal — cross-process operations
+    pub pidfd_count:             u64,
+    /// mmap(PROT_EXEC) calls — shellcode staging
+    pub mmap_exec_count:         u64,
+    /// Total mmap calls
+    pub mmap_total_count:        u64,
+    /// process_vm_writev calls — cross-process memory writes
+    pub cross_proc_write_count:  u64,
+    /// ptrace calls
+    pub ptrace_count:            u64,
+    /// memfd_create calls — fileless execution
+    pub memfd_count:             u64,
+    /// setuid/setgid/setresuid/setresgid calls
+    pub setuid_attempt_count:    u64,
+    /// capset() calls
+    pub cap_change_count:        u64,
+    /// init_module/finit_module calls
+    pub module_load_count:       u64,
+    /// unshare/setns calls
+    pub namespace_change_count:  u64,
+    /// Privileged syscalls / total syscalls ratio (updated as EMA)
+    pub priv_syscall_ratio_ema:  f64,
+    /// Inter-event timing: coefficient of variation (low = beaconing)
+    pub timing_cv:               f64,
+    /// perf_event_open calls — side-channel
+    pub perf_event_count:        u64,
+    /// Observation window start.
+    pub window_start:            Option<Instant>,
+    pub last_event_ts:           Option<Instant>,
+    /// Recent inter-event intervals (nanoseconds, capped at 128 entries)
+    #[serde(skip)]
+    pub recent_intervals:        VecDeque<u64>,
 }
 
 impl ProcessProfile {
@@ -137,7 +204,7 @@ impl ProcessProfile {
             pid,
             process_name:            comm.to_string(),
             event_count:             0,
-            syscall_counts:          HashMap::new(),
+            syscall_counts:          std::collections::HashMap::new(),
             unique_syscall_count:    0,
             syscall_rate_ema:        0.0,
             child_spawns:            0,
@@ -145,8 +212,25 @@ impl ProcessProfile {
             total_network_bytes:     0,
             write_entropy_estimate:  0.0,
             dangerous_syscall_count: 0,
+            bpf_call_count:          0,
+            io_uring_count:          0,
+            userfaultfd_count:       0,
+            pidfd_count:             0,
+            mmap_exec_count:         0,
+            mmap_total_count:        0,
+            cross_proc_write_count:  0,
+            ptrace_count:            0,
+            memfd_count:             0,
+            setuid_attempt_count:    0,
+            cap_change_count:        0,
+            module_load_count:       0,
+            namespace_change_count:  0,
+            priv_syscall_ratio_ema:  0.0,
+            timing_cv:               1.0,
+            perf_event_count:        0,
             window_start:            None,
             last_event_ts:           None,
+            recent_intervals:        VecDeque::new(),
         }
     }
 
@@ -161,42 +245,99 @@ impl ProcessProfile {
         *self.syscall_counts.entry(event.syscall_nr).or_insert(0) += 1;
         self.unique_syscall_count = self.syscall_counts.len();
 
-        // Update EMA of syscall rate (α = 0.05 for stability)
+        // ── Timing ─────────────────────────────────────────────────────────
         if let Some(last) = self.last_event_ts {
-            let dt_secs = now.duration_since(last).as_secs_f64().max(1e-6);
-            let instantaneous_rate = 1.0 / dt_secs;
-            self.syscall_rate_ema = 0.05 * instantaneous_rate + 0.95 * self.syscall_rate_ema;
+            let dt_ns = now.duration_since(last).as_nanos() as u64;
+            let dt_secs = dt_ns as f64 / 1_000_000_000.0;
+            // EMA of syscall rate
+            let inst_rate = if dt_secs > 1e-9 { 1.0 / dt_secs } else { 1.0 };
+            self.syscall_rate_ema = 0.05 * inst_rate + 0.95 * self.syscall_rate_ema;
+            // Record interval for timing analysis
+            self.recent_intervals.push_back(dt_ns);
+            if self.recent_intervals.len() > 128 {
+                self.recent_intervals.pop_front();
+            }
+            // Update timing CV
+            if self.recent_intervals.len() >= 16 {
+                self.timing_cv = compute_cv(&self.recent_intervals);
+            }
         }
         self.last_event_ts = Some(now);
 
-        if event.is_exec_event() {
-            self.child_spawns += 1;
-        }
-        if event.is_memory_event() {
-            self.memory_alloc_events += 1;
-        }
-        if event.is_dangerous() {
-            self.dangerous_syscall_count += 1;
+        // ── Category tracking ──────────────────────────────────────────────
+        if event.is_exec_event()   { self.child_spawns += 1; }
+        if event.is_memory_event() { self.memory_alloc_events += 1; }
+        if event.is_dangerous()    { self.dangerous_syscall_count += 1; }
+
+        // ── New vector syscalls ────────────────────────────────────────────
+        match event.syscall_nr {
+            SYS_BPF => {
+                self.bpf_call_count += 1;
+            }
+            SYS_IO_URING_SETUP | SYS_IO_URING_ENTER | SYS_IO_URING_REGISTER => {
+                self.io_uring_count += 1;
+            }
+            SYS_USERFAULTFD => {
+                self.userfaultfd_count += 1;
+            }
+            SYS_PIDFD_OPEN | SYS_PIDFD_SEND_SIGNAL => {
+                self.pidfd_count += 1;
+            }
+            SYS_MMAP => {
+                self.mmap_total_count += 1;
+                let prot = event.byte_count as u32;
+                if (prot & 0x4) != 0 { // PROT_EXEC
+                    self.mmap_exec_count += 1;
+                }
+            }
+            SYS_PROCESS_VM_WRITEV => {
+                self.cross_proc_write_count += 1;
+            }
+            SYS_PTRACE => {
+                self.ptrace_count += 1;
+            }
+            SYS_MEMFD_CREATE => {
+                self.memfd_count += 1;
+            }
+            SYS_SETUID | SYS_SETGID | SYS_SETRESUID | SYS_SETRESGID => {
+                self.setuid_attempt_count += 1;
+            }
+            SYS_CAPSET => {
+                self.cap_change_count += 1;
+            }
+            SYS_INIT_MODULE | SYS_FINIT_MODULE => {
+                self.module_load_count += 1;
+            }
+            SYS_UNSHARE | SYS_SETNS => {
+                self.namespace_change_count += 1;
+            }
+            SYS_PERF_EVENT_OPEN => {
+                self.perf_event_count += 1;
+            }
+            _ => {}
         }
 
-        // Network byte accumulation
-        if matches!(event.syscall_nr, n if n == SYS_SENDMSG || n == SYS_RECVMSG ||
-            n == SYS_READ || n == SYS_WRITE) && event.byte_count > 0
+        // ── Network bytes ──────────────────────────────────────────────────
+        if matches!(event.syscall_nr,
+            SYS_SENDMSG | SYS_RECVMSG | SYS_READ | SYS_WRITE)
+            && event.byte_count > 0
         {
             self.total_network_bytes += event.byte_count;
         }
 
-        // Write entropy: Shannon entropy of the byte distribution of recent write data.
-        // We approximate this using the LSB distribution of `byte_count` values.
+        // ── Write entropy (Shannon proxy via LSB distribution) ──────────────
         if event.syscall_nr == SYS_WRITE && event.byte_count > 0 {
             let lsb = (event.byte_count & 0xFF) as f64 / 255.0;
-            // Exponential average of per-write "entropy proxy"
             self.write_entropy_estimate =
                 0.1 * lsb + 0.9 * self.write_entropy_estimate;
         }
+
+        // ── Privileged syscall ratio EMA ───────────────────────────────────
+        let is_priv = if event.is_dangerous() { 1.0 } else { 0.0 };
+        self.priv_syscall_ratio_ema =
+            0.02 * is_priv + 0.98 * self.priv_syscall_ratio_ema;
     }
 
-    /// Observation window in seconds.
     pub fn window_secs(&self) -> f64 {
         match self.window_start {
             Some(start) => start.elapsed().as_secs_f64().max(1.0),
@@ -204,72 +345,91 @@ impl ProcessProfile {
         }
     }
 
-    /// Child spawn rate per second over the observation window.
     pub fn child_spawn_rate(&self) -> f64 {
         self.child_spawns as f64 / self.window_secs()
     }
 
-    /// Memory allocation rate per second.
     pub fn memory_alloc_rate(&self) -> f64 {
         self.memory_alloc_events as f64 / self.window_secs()
     }
+
+    pub fn module_load_rate(&self) -> f64 {
+        self.module_load_count as f64 / self.window_secs()
+    }
+
+    pub fn mmap_exec_ratio(&self) -> f64 {
+        if self.mmap_total_count == 0 { 0.0 }
+        else { self.mmap_exec_count as f64 / self.mmap_total_count as f64 }
+    }
+
+    pub fn io_uring_ratio(&self) -> f64 {
+        if self.event_count == 0 { 0.0 }
+        else { self.io_uring_count as f64 / self.event_count as f64 }
+    }
+}
+
+/// Coefficient of variation for a sliding window of nanosecond intervals.
+fn compute_cv(intervals: &VecDeque<u64>) -> f64 {
+    if intervals.len() < 2 { return 1.0; }
+    let n = intervals.len() as f64;
+    let mean = intervals.iter().sum::<u64>() as f64 / n;
+    if mean < 1.0 { return 1.0; }
+    let var = intervals.iter()
+        .map(|&x| { let d = x as f64 - mean; d * d })
+        .sum::<f64>() / n;
+    (var.sqrt() / mean).clamp(0.0, 10.0)
 }
 
 // ─── SyscallProfiler ─────────────────────────────────────────────────────────
 
-/// Thread-safe per-process syscall profiler.
-///
-/// Maintains a map of PID → `ProcessProfile`, evicting profiles for processes
-/// that have not been seen for more than 5 minutes.
+/// Lock-free per-process syscall profiler using DashMap.
 pub struct SyscallProfiler {
-    profiles: RwLock<HashMap<u32, ProcessProfile>>,
+    profiles:    DashMap<u32, ProcessProfile>,
     evict_after: Duration,
 }
 
 impl SyscallProfiler {
     pub fn new() -> Self {
         Self {
-            profiles:    RwLock::new(HashMap::new()),
+            profiles:    DashMap::new(),
             evict_after: Duration::from_secs(300),
         }
     }
 
-    /// Record a new syscall event and update the corresponding profile.
     pub fn record(&self, event: &SyscallEvent) {
-        let mut map = self.profiles.write().unwrap();
-        let profile = map.entry(event.pid)
+        let mut entry = self.profiles
+            .entry(event.pid)
             .or_insert_with(|| ProcessProfile::new(event.pid, &event.comm));
-        profile.update(event);
+        entry.value_mut().update(event);
         debug!(
             "SyscallProfiler: PID {} ({}) event #{} syscall={}",
-            event.pid, event.comm, profile.event_count, event.syscall_nr
+            event.pid, event.comm, entry.event_count, event.syscall_nr
         );
     }
 
-    /// Get a snapshot of the profile for a given PID.
     pub fn get_profile(&self, pid: u32) -> Option<ProcessProfile> {
-        self.profiles.read().unwrap().get(&pid).cloned()
+        self.profiles.get(&pid).map(|r| r.value().clone())
     }
 
-    /// Get all active profiles.
     pub fn all_profiles(&self) -> Vec<ProcessProfile> {
-        self.profiles.read().unwrap().values().cloned().collect()
+        self.profiles.iter().map(|r| r.value().clone()).collect()
     }
 
-    /// Evict profiles for processes not seen within `evict_after`.
     pub fn evict_stale(&self) {
-        let mut map = self.profiles.write().unwrap();
         let threshold = self.evict_after;
-        map.retain(|_, profile| {
+        self.profiles.retain(|_, profile| {
             profile.last_event_ts
                 .map(|t| t.elapsed() < threshold)
                 .unwrap_or(false)
         });
     }
 
-    /// Number of active profiles.
+    pub fn evict_pid(&self, pid: u32) {
+        self.profiles.remove(&pid);
+    }
+
     pub fn profile_count(&self) -> usize {
-        self.profiles.read().unwrap().len()
+        self.profiles.len()
     }
 }
 
@@ -314,7 +474,7 @@ mod tests {
         profiler.record(&make_event(100, SYS_FORK));
         profiler.record(&make_event(100, SYS_EXECVE));
         profiler.record(&make_event(100, SYS_CLONE));
-        profiler.record(&make_event(100, SYS_READ)); // not a spawn
+        profiler.record(&make_event(100, SYS_READ));
         let profile = profiler.get_profile(100).unwrap();
         assert_eq!(profile.child_spawns, 3);
     }
@@ -324,9 +484,34 @@ mod tests {
         let profiler = SyscallProfiler::new();
         profiler.record(&make_event(200, SYS_PTRACE));
         profiler.record(&make_event(200, SYS_MEMFD_CREATE));
-        profiler.record(&make_event(200, SYS_WRITE)); // not dangerous
+        profiler.record(&make_event(200, SYS_WRITE));
         let profile = profiler.get_profile(200).unwrap();
         assert_eq!(profile.dangerous_syscall_count, 2);
+    }
+
+    #[test]
+    fn bpf_calls_tracked() {
+        let profiler = SyscallProfiler::new();
+        for _ in 0..5 { profiler.record(&make_event(300, SYS_BPF)); }
+        let profile = profiler.get_profile(300).unwrap();
+        assert_eq!(profile.bpf_call_count, 5);
+    }
+
+    #[test]
+    fn io_uring_tracked() {
+        let profiler = SyscallProfiler::new();
+        profiler.record(&make_event(400, SYS_IO_URING_SETUP));
+        profiler.record(&make_event(400, SYS_IO_URING_ENTER));
+        let profile = profiler.get_profile(400).unwrap();
+        assert_eq!(profile.io_uring_count, 2);
+    }
+
+    #[test]
+    fn userfaultfd_tracked() {
+        let profiler = SyscallProfiler::new();
+        profiler.record(&make_event(500, SYS_USERFAULTFD));
+        let profile = profiler.get_profile(500).unwrap();
+        assert_eq!(profile.userfaultfd_count, 1);
     }
 
     #[test]
@@ -335,7 +520,6 @@ mod tests {
         profiler.record(&make_event(1, SYS_READ));
         profiler.record(&make_event(2, SYS_WRITE));
         profiler.record(&make_event(2, SYS_WRITE));
-
         assert_eq!(profiler.get_profile(1).unwrap().event_count, 1);
         assert_eq!(profiler.get_profile(2).unwrap().event_count, 2);
         assert!(profiler.get_profile(3).is_none());
@@ -343,9 +527,10 @@ mod tests {
 
     #[test]
     fn eviction_removes_stale_profiles() {
+        use std::sync::RwLock;
         let profiler = SyscallProfiler {
-            profiles:    RwLock::new(HashMap::new()),
-            evict_after: Duration::from_nanos(1), // 1 ns → immediately stale
+            profiles:    DashMap::new(),
+            evict_after: Duration::from_nanos(1),
         };
         profiler.record(&make_event(999, SYS_READ));
         std::thread::sleep(Duration::from_millis(1));
@@ -360,5 +545,23 @@ mod tests {
             profiler.record(&make_event(pid, SYS_READ));
         }
         assert_eq!(profiler.all_profiles().len(), 3);
+    }
+
+    #[test]
+    fn setuid_attempts_tracked() {
+        let profiler = SyscallProfiler::new();
+        profiler.record(&make_event(600, SYS_SETUID));
+        profiler.record(&make_event(600, SYS_SETRESUID));
+        let profile = profiler.get_profile(600).unwrap();
+        assert_eq!(profile.setuid_attempt_count, 2);
+    }
+
+    #[test]
+    fn module_load_tracked() {
+        let profiler = SyscallProfiler::new();
+        profiler.record(&make_event(700, SYS_INIT_MODULE));
+        profiler.record(&make_event(700, SYS_FINIT_MODULE));
+        let profile = profiler.get_profile(700).unwrap();
+        assert_eq!(profile.module_load_count, 2);
     }
 }
