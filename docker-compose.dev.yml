@@ -1,0 +1,224 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Development Stack with Full Observability (Phase 2)
+# Includes: Postgres, Redis, Prometheus, Grafana, Loki, Jaeger, OTel Collector
+#
+# Usage:
+#   cp .env.example .env && nano .env   # fill required values
+#   docker-compose -f docker-compose.dev.yml up -d
+#   open http://localhost:3000          # Grafana (admin/admin)
+#   open http://localhost:16686         # Jaeger
+#   open http://localhost:8080/swagger-ui  # Thor API docs
+# ═══════════════════════════════════════════════════════════════════════════════
+version: "3.9"
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+services:
+  # ─── Core Infrastructure ────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: thor-postgres-dev
+    restart: unless-stopped
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: thor
+      POSTGRES_USER: thor_user
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-thor_dev_password}"
+    volumes:
+      - thor_db_dev:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thor_user -d thor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [thor-dev]
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    container_name: thor-redis-dev
+    restart: unless-stopped
+    ports: ["6379:6379"]
+    command: redis-server --requirepass "${REDIS_PASSWORD:-thor_dev_redis}" --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - thor_redis_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-thor_dev_redis}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [thor-dev]
+    logging: *default-logging
+
+  # ─── Thor Agent (dev mode) ──────────────────────────────────────────────────
+
+  thor-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: thor-agent-dev
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    cap_add: [NET_ADMIN, NET_RAW, SYS_ADMIN, PERFMON, BPF]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /sys/fs/bpf:/sys/fs/bpf
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - thor_audit_dev:/var/lib/thor
+      - ./rules:/app/rules:ro
+      - ./models:/app/models:ro
+    environment:
+      THOR_INTERFACE: "${THOR_INTERFACE:-lo}"
+      THOR_JWT_SECRET: "${THOR_JWT_SECRET:?set THOR_JWT_SECRET}"
+      THOR_ADMIN_PASSWORD: "${THOR_ADMIN_PASSWORD:?set THOR_ADMIN_PASSWORD}"
+      DATABASE_URL: "postgres://thor_user:${DB_PASSWORD:-thor_dev_password}@localhost:5432/thor?sslmode=disable"
+      THOR_REDIS_URL: "redis://:${REDIS_PASSWORD:-thor_dev_redis}@localhost:6379"
+      RUST_LOG: "thor_agent=debug,aya=warn,sqlx=warn"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4317"
+      OTEL_SERVICE_NAME: "thor-agent"
+    command: ["cargo", "run", "--bin", "thor-agent", "--"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    logging: *default-logging
+
+  # ─── Observability Stack ────────────────────────────────────────────────────
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.99.0
+    container_name: thor-otel-collector
+    restart: unless-stopped
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus metrics scrape
+      - "8888:8888"   # Collector self-metrics
+    volumes:
+      - ./configs/otel-collector.yml:/etc/otelcol-contrib/config.yaml:ro
+    networks: [thor-dev]
+    logging: *default-logging
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: thor-prometheus
+    restart: unless-stopped
+    ports: ["9091:9090"]
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/prometheus-rules.yml:/etc/prometheus/rules/thor-rules.yml:ro
+      - thor_prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+      - "--log.level=warn"
+    networks: [thor-dev]
+    logging: *default-logging
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: thor-alertmanager
+    restart: unless-stopped
+    ports: ["9093:9093"]
+    volumes:
+      - ./configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks: [thor-dev]
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: thor-grafana
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-ThorSOC@2024}"
+      GF_SECURITY_ADMIN_USER: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: grafana-piechart-panel
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-clock-panel,grafana-worldmap-panel
+      GF_SERVER_ROOT_URL: "http://localhost:3000"
+    volumes:
+      - thor_grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on: [prometheus]
+    networks: [thor-dev]
+    logging: *default-logging
+
+  loki:
+    image: grafana/loki:2.9.7
+    container_name: thor-loki
+    restart: unless-stopped
+    ports: ["3100:3100"]
+    volumes:
+      - thor_loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks: [thor-dev]
+    logging: *default-logging
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: thor-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"   # UI
+      - "14250:14250"   # gRPC (from OTel collector)
+      - "14268:14268"   # HTTP thrift
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks: [thor-dev]
+    logging: *default-logging
+
+  # ─── DB Exporters for Prometheus ────────────────────────────────────────────
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: thor-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://thor_user:${DB_PASSWORD:-thor_dev_password}@postgres:5432/thor?sslmode=disable"
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [thor-dev]
+    logging: *default-logging
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.58.0
+    container_name: thor-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-thor_dev_redis}"
+    depends_on: [redis]
+    networks: [thor-dev]
+    logging: *default-logging
+
+volumes:
+  thor_db_dev:
+  thor_redis_dev:
+  thor_audit_dev:
+  thor_prometheus_data:
+  thor_grafana_data:
+  thor_loki_data:
+
+networks:
+  thor-dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/24

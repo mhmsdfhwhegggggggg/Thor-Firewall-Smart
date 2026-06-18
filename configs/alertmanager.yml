@@ -1,0 +1,109 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Alertmanager Configuration — Thor Firewall Smart (Phase 2)
+# Routes: critical → PagerDuty + Slack, high → Slack, warning → Email
+# ═══════════════════════════════════════════════════════════════════════════════
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: "${SMTP_HOST:-localhost:587}"
+  smtp_from: "thor-alerts@${SMTP_DOMAIN:-yourdomain.com}"
+  smtp_auth_username: "${SMTP_USERNAME}"
+  smtp_auth_password: "${SMTP_PASSWORD}"
+  slack_api_url: "${SLACK_WEBHOOK_URL}"
+
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+route:
+  group_by: ["alertname", "severity", "team"]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 1h
+  receiver: "soc-slack"
+  routes:
+    # Critical → immediate PagerDuty + Slack (no grouping delay)
+    - matchers:
+        - severity = "critical"
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 15m
+      receiver: "critical-pagerduty"
+      continue: true
+
+    - matchers:
+        - severity = "critical"
+      receiver: "soc-slack-critical"
+
+    # High → Slack with 30s delay
+    - matchers:
+        - severity = "high"
+      group_wait: 30s
+      receiver: "soc-slack"
+
+    # Ops alerts → separate channel
+    - matchers:
+        - team = "ops"
+      receiver: "ops-slack"
+
+    # Data science alerts
+    - matchers:
+        - team = "data-science"
+      receiver: "ds-email"
+
+receivers:
+  - name: "soc-slack-critical"
+    slack_configs:
+      - channel: "#soc-critical"
+        icon_emoji: ":rotating_light:"
+        color: "danger"
+        title: "🚨 CRITICAL: {{ .GroupLabels.alertname }}"
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .CommonLabels.severity }}
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Runbook:* {{ .Annotations.runbook }}
+          {{ end }}
+        send_resolved: true
+
+  - name: "soc-slack"
+    slack_configs:
+      - channel: "#soc-alerts"
+        icon_emoji: ":shield:"
+        color: "warning"
+        title: "⚠️ {{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        send_resolved: true
+
+  - name: "critical-pagerduty"
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"
+        description: "Thor Alert: {{ .GroupLabels.alertname }}"
+        severity: critical
+        details:
+          firing: "{{ .Alerts.Firing | len }}"
+          resolved: "{{ .Alerts.Resolved | len }}"
+
+  - name: "ops-slack"
+    slack_configs:
+      - channel: "#thor-ops"
+        title: "🔧 Ops Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}"
+        send_resolved: true
+
+  - name: "ds-email"
+    email_configs:
+      - to: "${DS_TEAM_EMAIL:-data-science@yourdomain.com}"
+        subject: "Thor ML Alert: {{ .GroupLabels.alertname }}"
+        body: |
+          Alert: {{ .GroupLabels.alertname }}
+          {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+
+inhibit_rules:
+  # If critical is firing, suppress warnings for same alert
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [alertname]
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="high"]
+    equal: [alertname]

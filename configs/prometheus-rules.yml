@@ -1,0 +1,152 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Prometheus Alerting Rules (Phase 2)
+# ═══════════════════════════════════════════════════════════════════════════════
+groups:
+  # ── Critical Security Alerts ────────────────────────────────────────────────
+  - name: thor_security_critical
+    interval: 15s
+    rules:
+      - alert: ThorCriticalAlertSpike
+        expr: increase(thor_alerts_total{level="critical"}[5m]) > 10
+        for: 0m
+        labels:
+          severity: critical
+          team: soc
+        annotations:
+          summary: "🚨 Critical alert spike: {{ $value }} critical alerts in 5 minutes"
+          description: "A sudden spike of critical security alerts on {{ $labels.agent_hostname }}. Possible active attack."
+          runbook: "https://wiki.internal/thor/runbooks/critical-alert-spike"
+
+      - alert: ThorActiveCampaignDetected
+        expr: thor_active_campaigns > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: soc
+        annotations:
+          summary: "🎯 Active attack campaign detected: {{ $value }} campaigns"
+          description: "Thor has identified {{ $value }} active attack campaign(s). Immediate investigation required."
+
+      - alert: ThorXdpDropRateHigh
+        expr: rate(thor_xdp_drops_total[1m]) > 10000
+        for: 1m
+        labels:
+          severity: high
+          team: network
+        annotations:
+          summary: "🔥 XDP drop rate exceeds 10K/sec: {{ $value }}/sec"
+          description: "Possible DDoS attack or misconfiguration on {{ $labels.agent_hostname }}"
+
+      - alert: ThorHighSeverityIOCMatch
+        expr: increase(thor_ioc_matches_total{level="critical"}[1m]) > 5
+        for: 0m
+        labels:
+          severity: high
+          team: soc
+        annotations:
+          summary: "☠️  Multiple critical IOC matches: {{ $value }} in 1 minute"
+          description: "High frequency of matches against known malicious indicators"
+
+  # ── Agent Health ─────────────────────────────────────────────────────────────
+  - name: thor_agent_health
+    interval: 30s
+    rules:
+      - alert: ThorAgentDown
+        expr: up{job="thor-agent"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "❌ Thor agent is DOWN on {{ $labels.instance }}"
+          description: "Thor agent has been unreachable for more than 1 minute. Security monitoring is BLIND."
+
+      - alert: ThorAgentHighMemory
+        expr: process_resident_memory_bytes{job="thor-agent"} > 4e9
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "⚠️  Thor agent memory > 4GB on {{ $labels.instance }}"
+          description: "Thor agent is consuming {{ $value | humanize1024 }} of RAM"
+
+      - alert: ThorEventPipelineLag
+        expr: thor_pipeline_queue_depth > 100000
+        for: 2m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "⚠️  Event pipeline queue depth: {{ $value }} events"
+          description: "Events are accumulating faster than they can be processed"
+
+      - alert: ThorEbpfProbeDead
+        expr: rate(thor_ebpf_events_total[2m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "💀 eBPF probe is not generating events on {{ $labels.instance }}"
+          description: "No eBPF events in 2 minutes — kernel probes may have crashed"
+
+  # ── Database Health ───────────────────────────────────────────────────────────
+  - name: thor_database_health
+    interval: 60s
+    rules:
+      - alert: ThorDBConnectionPoolExhausted
+        expr: thor_db_pool_available == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: ops
+        annotations:
+          summary: "🗄️  DB connection pool exhausted"
+          description: "All {{ $labels.pool_size }} database connections are in use"
+
+      - alert: ThorDBSlowQueries
+        expr: histogram_quantile(0.95, rate(thor_db_query_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: ops
+        annotations:
+          summary: "🐌 95th percentile DB query time > 5s"
+
+  # ── ML Model Health ──────────────────────────────────────────────────────────
+  - name: thor_ml_health
+    interval: 60s
+    rules:
+      - alert: ThorMLFalsePositiveRateHigh
+        expr: thor_ml_false_positive_rate_7d > 0.1
+        for: 30m
+        labels:
+          severity: warning
+          team: data-science
+        annotations:
+          summary: "🤖 ML false positive rate > 10% (7-day rolling)"
+          description: "FPR = {{ $value | humanizePercentage }}. Model retraining may be needed."
+
+      - alert: ThorMLModelInferenceTimeout
+        expr: histogram_quantile(0.99, rate(thor_ml_inference_duration_ms_bucket[5m])) > 50
+        for: 5m
+        labels:
+          severity: warning
+          team: data-science
+        annotations:
+          summary: "🤖 ML inference p99 latency > 50ms"
+
+  # ── Threat Intel Freshness ───────────────────────────────────────────────────
+  - name: thor_intel_freshness
+    interval: 300s
+    rules:
+      - alert: ThorIntelFeedStale
+        expr: time() - thor_intel_last_update_timestamp > 7200
+        for: 10m
+        labels:
+          severity: warning
+          team: soc
+        annotations:
+          summary: "🕰️  Threat intel feed not updated for > 2 hours"
+          description: "Feed {{ $labels.feed_name }} last updated {{ $value | humanizeDuration }} ago"

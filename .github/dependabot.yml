@@ -1,0 +1,64 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dependabot — Phase 5: Automated dependency updates
+# Covers: Rust (cargo), Docker, GitHub Actions
+# ═══════════════════════════════════════════════════════════════════════════════
+version: 2
+
+updates:
+  # ── Rust/Cargo dependencies ──────────────────────────────────────────────────
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      # Group all patch updates together
+      patch-updates:
+        patterns: ["*"]
+        update-types: ["patch"]
+      # Async runtime together
+      tokio-ecosystem:
+        patterns: ["tokio", "tokio-*", "tower", "tower-*", "axum", "hyper"]
+      # Security-sensitive: serde together
+      serialization:
+        patterns: ["serde", "serde_*", "bincode"]
+    ignore:
+      # Don't auto-bump aya (eBPF) — requires kernel testing
+      - dependency-name: "aya"
+        update-types: ["version-update:semver-major"]
+      # Don't auto-bump ORT (ONNX Runtime) — requires model compatibility check
+      - dependency-name: "ort"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    labels: ["dependencies", "rust", "security"]
+    reviewers: ["mhmsdfhwhegggggggg"]
+    commit-message:
+      prefix: "deps(cargo)"
+      include: "scope"
+
+  # ── Docker images ─────────────────────────────────────────────────────────────
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: tuesday
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "docker"]
+    commit-message:
+      prefix: "deps(docker)"
+
+  # ── GitHub Actions ────────────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: wednesday
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    labels: ["dependencies", "github-actions"]
+    commit-message:
+      prefix: "deps(actions)"

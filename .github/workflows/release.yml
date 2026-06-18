@@ -1,0 +1,172 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Production Release Workflow
+# Triggered on: git tag v*.*.*
+# Stages: build → docker → helm-package → github-release
+# ═══════════════════════════════════════════════════════════════════════════════
+name: Thor Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  # ── 1. Build release binary for multiple targets ─────────────────────────────
+  build-release:
+    name: Build Release Binary
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install cross-compilation deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm libbpf-dev lld libyara-dev libssl-dev \
+            pkg-config gcc-aarch64-linux-gnu
+      - name: Build release binary
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          cargo build --release --bin thor-agent --target ${{ matrix.target }} \
+            --no-default-features --features production
+      - name: Package binary
+        run: |
+          TARGET=${{ matrix.target }}
+          mkdir -p dist
+          cp target/${TARGET}/release/thor-agent dist/thor-agent-${TARGET}
+          sha256sum dist/thor-agent-${TARGET} > dist/thor-agent-${TARGET}.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thor-agent-${{ matrix.target }}
+          path: dist/
+
+  # ── 2. Docker multi-arch image ───────────────────────────────────────────────
+  docker-release:
+    name: Docker Release Image
+    runs-on: ubuntu-22.04
+    needs: build-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract tag
+        id: tag
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      - name: Build and push multi-arch image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  # ── 3. SBOM & Vulnerability report ──────────────────────────────────────────
+  sbom-release:
+    name: SBOM + CVE Report
+    runs-on: ubuntu-22.04
+    needs: build-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          cargo install cargo-cyclonedx --locked
+          cargo cyclonedx --format json --output thor-sbom-${{ github.ref_name }}.json
+      - name: Run cargo audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit --json > thor-audit-${{ github.ref_name }}.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            thor-sbom-*.json
+            thor-audit-*.json
+
+  # ── 4. GitHub Release ────────────────────────────────────────────────────────
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-22.04
+    needs: [docker-release, sbom-release]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty="- %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log --pretty="- %s (%h)" --no-merges -20)
+          fi
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Thor Firewall Smart ${{ github.ref_name }}
+          body: |
+            ## 🛡️ Thor Firewall Smart ${{ github.ref_name }}
+
+            ### Changes
+            ${{ steps.changelog.outputs.CHANGELOG }}
+
+            ### Installation
+            ```bash
+            # Docker
+            docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+
+            # Binary
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/thor-agent-x86_64-unknown-linux-gnu
+            chmod +x thor-agent-x86_64-unknown-linux-gnu
+            sudo mv thor-agent-x86_64-unknown-linux-gnu /usr/local/bin/thor-agent
+            ```
+
+            ### Verification
+            ```bash
+            sha256sum -c thor-agent-x86_64-unknown-linux-gnu.sha256
+            ```
+          files: |
+            artifacts/**/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc.') }}

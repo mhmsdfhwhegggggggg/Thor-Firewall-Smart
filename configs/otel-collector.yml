@@ -1,0 +1,128 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# OpenTelemetry Collector — Thor Firewall Smart (Phase 2)
+# Collects: Traces (Jaeger) + Metrics (Prometheus) + Logs (Loki)
+# ═══════════════════════════════════════════════════════════════════════════════
+receivers:
+  # ── Receive traces + metrics from Thor agent (OTLP gRPC) ──────────────────
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # ── Scrape Prometheus metrics from Thor agent ──────────────────────────────
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: thor-agent-1
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["thor-agent-1:9090"]
+              labels:
+                agent: thor-agent-1
+        - job_name: thor-agent-2
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["thor-agent-2:9091"]
+              labels:
+                agent: thor-agent-2
+        - job_name: postgres
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["postgres-exporter:9187"]
+        - job_name: redis
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["redis-exporter:9121"]
+
+  # ── Host metrics (CPU, memory, disk, network) ──────────────────────────────
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      network:
+      load:
+      filesystem:
+
+processors:
+  # ── Batch for efficiency ───────────────────────────────────────────────────
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+
+  # ── Memory limiter (prevent OOM) ──────────────────────────────────────────
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # ── Add resource attributes ───────────────────────────────────────────────
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: production
+        action: upsert
+      - key: service.name
+        value: thor-firewall-smart
+        action: upsert
+
+  # ── Filter sensitive data out of traces ───────────────────────────────────
+  attributes:
+    actions:
+      - key: http.request.header.authorization
+        action: delete
+      - key: db.statement
+        pattern: "password|secret|token|key"
+        action: hash
+
+exporters:
+  # ── Traces → Jaeger ───────────────────────────────────────────────────────
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+
+  # ── Metrics → Prometheus (remote write) ───────────────────────────────────
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: thor
+    enable_open_metrics: true
+
+  # ── Logs → Loki ───────────────────────────────────────────────────────────
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    labels:
+      attributes:
+        service.name: "service"
+        deployment.environment: "environment"
+        agent: "agent"
+
+  # ── Debug (dev only) ──────────────────────────────────────────────────────
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource, attributes]
+      exporters: [jaeger]
+
+    metrics:
+      receivers: [otlp, prometheus, hostmetrics]
+      processors: [memory_limiter, batch, resource]
+      exporters: [prometheus]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [loki]
+
+  telemetry:
+    logs:
+      level: warn
+    metrics:
+      address: 0.0.0.0:8888

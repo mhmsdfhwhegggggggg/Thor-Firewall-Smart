@@ -1,0 +1,138 @@
+{
+  "__inputs": [{ "name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus" }],
+  "title": "Thor SOC — Security Operations Center",
+  "uid": "thor-soc-main",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "15s",
+  "time": { "from": "now-3h", "to": "now" },
+  "tags": ["thor", "security", "soc"],
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "🚨 Critical Alerts (1h)",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{"color":"green","value":0},{"color":"yellow","value":5},{"color":"red","value":20}] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "increase(thor_alerts_total{level=\"critical\"}[1h])", "legendFormat": "Critical" }]
+    },
+    {
+      "id": 2, "type": "stat", "title": "🎯 Active Campaigns",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{"color":"green","value":0},{"color":"orange","value":1},{"color":"red","value":3}] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "thor_active_campaigns", "legendFormat": "Campaigns" }]
+    },
+    {
+      "id": 3, "type": "stat", "title": "📦 Packets/sec (XDP)",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "value" },
+      "fieldConfig": { "defaults": { "unit": "pps", "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "rate(thor_packets_total[1m])", "legendFormat": "pps" }]
+    },
+    {
+      "id": 4, "type": "stat", "title": "🔒 IOC Matches (24h)",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{"color":"green","value":0},{"color":"orange","value":10},{"color":"red","value":50}] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "increase(thor_ioc_matches_total[24h])", "legendFormat": "IOC Hits" }]
+    },
+    {
+      "id": 5, "type": "stat", "title": "🤖 ML FPR (7d %)",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": { "steps": [{"color":"green","value":0},{"color":"yellow","value":5},{"color":"red","value":10}] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "thor_ml_false_positive_rate_7d * 100", "legendFormat": "FPR %" }]
+    },
+    {
+      "id": 6, "type": "stat", "title": "✅ Agents Online",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "options": { "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{"color":"red","value":0},{"color":"green","value":1}] },
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "count(up{job=~\"thor-agent.*\"} == 1)", "legendFormat": "Online" }]
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Alert Rate by Severity (15m buckets)",
+      "gridPos": { "x": 0, "y": 4, "w": 16, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 15 } } },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "datasource": "${DS_PROMETHEUS}", "expr": "increase(thor_alerts_total{level=\"critical\"}[15m])", "legendFormat": "Critical" },
+        { "datasource": "${DS_PROMETHEUS}", "expr": "increase(thor_alerts_total{level=\"high\"}[15m])", "legendFormat": "High" },
+        { "datasource": "${DS_PROMETHEUS}", "expr": "increase(thor_alerts_total{level=\"medium\"}[15m])", "legendFormat": "Medium" },
+        { "datasource": "${DS_PROMETHEUS}", "expr": "increase(thor_alerts_total{level=\"low\"}[15m])", "legendFormat": "Low" }
+      ]
+    },
+    {
+      "id": 11, "type": "piechart", "title": "Alerts by Rule Type",
+      "gridPos": { "x": 16, "y": 4, "w": 8, "h": 8 },
+      "options": { "pieType": "donut", "tooltip": { "mode": "single" }, "legend": { "displayMode": "table" } },
+      "targets": [
+        { "datasource": "${DS_PROMETHEUS}", "expr": "sum by (rule_type) (increase(thor_alerts_total[1h]))", "legendFormat": "{{rule_type}}" }
+      ]
+    },
+    {
+      "id": 20, "type": "timeseries", "title": "XDP Drop Rate (pps)",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "pps", "color": { "mode": "fixed", "fixedColor": "red" } } },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "rate(thor_xdp_drops_total[1m])", "legendFormat": "Drops/sec" }]
+    },
+    {
+      "id": 21, "type": "timeseries", "title": "Active Network Flows",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } } },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "thor_active_flows", "legendFormat": "Active Flows" }]
+    },
+    {
+      "id": 30, "type": "table", "title": "Recent Critical & High Alerts",
+      "gridPos": { "x": 0, "y": 18, "w": 24, "h": 8 },
+      "options": { "sortBy": [{ "displayName": "Time", "desc": true }] },
+      "targets": [{
+        "datasource": "PostgreSQL",
+        "rawSql": "SELECT detected_at AS time, rule_name, rule_type, threat_level, message, src_ip::text, process_name, mitre_technique FROM alerts WHERE threat_level IN ('critical','high') AND detected_at > NOW() - INTERVAL '3 hours' ORDER BY detected_at DESC LIMIT 50",
+        "format": "table"
+      }]
+    },
+    {
+      "id": 40, "type": "timeseries", "title": "ML Inference Latency (p50/p95/p99)",
+      "gridPos": { "x": 0, "y": 26, "w": 12, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [
+        { "datasource": "${DS_PROMETHEUS}", "expr": "histogram_quantile(0.50, rate(thor_ml_inference_duration_ms_bucket[5m]))", "legendFormat": "p50" },
+        { "datasource": "${DS_PROMETHEUS}", "expr": "histogram_quantile(0.95, rate(thor_ml_inference_duration_ms_bucket[5m]))", "legendFormat": "p95" },
+        { "datasource": "${DS_PROMETHEUS}", "expr": "histogram_quantile(0.99, rate(thor_ml_inference_duration_ms_bucket[5m]))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 41, "type": "timeseries", "title": "Threat Intel IOC Count (by Feed)",
+      "gridPos": { "x": 12, "y": 26, "w": 12, "h": 6 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{ "datasource": "${DS_PROMETHEUS}", "expr": "sum by (feed_name) (thor_ioc_count)", "legendFormat": "{{feed_name}}" }]
+    }
+  ]
+}
