@@ -4,7 +4,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ─── Stage 1: Builder ────────────────────────────────────────────────────────
-FROM rust:1.79-slim-bookworm AS builder
+FROM rust:1.96-slim-bookworm AS builder
 
 # Build args
 ARG BUILD_DATE
