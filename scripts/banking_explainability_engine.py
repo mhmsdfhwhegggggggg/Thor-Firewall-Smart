@@ -35,7 +35,7 @@ class ThorBankingAuditor:
         f_map[45]  = "LLM_Prompt_Injection_Pattern"
         return f_map
 
-    def explain_decision(self, input_vector, prediction_prob, threshold=0.999):
+    def explain_decision(self, input_vector, prediction_prob, threshold=0.80):
         """
         تفسير القرار الأمني بناءً على مساهمة الميزات.
         """
