@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
-// Thor XDP Firewall — IPv4 + IPv6 packet filter
-// Supports: LPM CIDR blocklist (v4+v6), port blocklist, per-IP rate limiting
+// Thor XDP Firewall — Enhanced Production Version
+// Supports: LPM CIDR blocklist (v4+v6), port blocklist, per-IP rate limiting, ICMP filtering, SYN Flood protection
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/in6.h>
 #include <bpf/bpf_helpers.h>
@@ -73,8 +74,17 @@ struct {
     __type(value, struct rate_state);
 } thor_rate_states SEC(".maps");
 
+/* SYN Flood protection state */
+struct syn_state { __u64 last_ts; __u32 count; };
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 100000);
+    __type(key, __u32);
+    __type(value, struct syn_state);
+} thor_syn_states SEC(".maps");
+
 /* Rate limit config */
-struct rate_limit_cfg { __u32 pps; __u64 window_ns; };
+struct rate_limit_cfg { __u32 pps; __u64 window_ns; __u32 syn_pps; };
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
@@ -129,7 +139,30 @@ static __always_inline int check_rate_limit(__u32 src_ip)
     return state->count > pps ? 1 : 0;
 }
 
-// ─── IPv6 blocklist check helper ──────────────────────────────────────────────
+static __always_inline int check_syn_flood(__u32 src_ip)
+{
+    __u32 zero = 0;
+    struct rate_limit_cfg *cfg =
+        bpf_map_lookup_elem(&thor_rate_config, &zero);
+    __u32 syn_pps = cfg ? cfg->syn_pps : 500;
+    __u64 window  = 1000000000ULL; // 1s window for SYN
+    __u64 now     = bpf_ktime_get_ns();
+
+    struct syn_state *state =
+        bpf_map_lookup_elem(&thor_syn_states, &src_ip);
+    if (!state) {
+        struct syn_state ns = { .last_ts = now, .count = 1 };
+        bpf_map_update_elem(&thor_syn_states, &src_ip, &ns, BPF_ANY);
+        return 0;
+    }
+    if (now - state->last_ts > window) {
+        state->last_ts = now;
+        state->count   = 1;
+        return 0;
+    }
+    state->count++;
+    return state->count > syn_pps ? 1 : 0;
+}
 
 static __always_inline int check_ipv6_blocklist(struct in6_addr *addr)
 {
@@ -149,7 +182,6 @@ int thor_xdp_drop(struct xdp_md *ctx)
     struct thor_stats *stats =
         bpf_map_lookup_elem(&thor_stats, &zero);
 
-    // ── Ethernet header ───────────────────────────────────────────────────────
     struct ethhdr *eth = data;
     if ((void *)(eth + 1) > data_end) {
         if (stats) {
@@ -162,9 +194,6 @@ int thor_xdp_drop(struct xdp_md *ctx)
 
     __u16 eth_proto = bpf_ntohs(eth->h_proto);
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // PATH A — IPv4
-    // ══════════════════════════════════════════════════════════════════════════
     if (eth_proto == ETH_P_IP) {
         struct iphdr *ip = (void *)(eth + 1);
         if ((void *)(ip + 1) > data_end) {
@@ -193,6 +222,16 @@ int thor_xdp_drop(struct xdp_md *ctx)
             }
             src_port = tcp->source;
             dst_port = tcp->dest;
+
+            // SYN Flood protection
+            if (tcp->syn && !tcp->ack) {
+                if (check_syn_flood(ip->saddr)) {
+                    if (stats) __sync_fetch_and_add(&stats->packets_dropped, 1);
+                    emit_drop_event(ip->saddr, ip->daddr, src_port, dst_port,
+                                    ip->protocol, DROP_REASON_RATE_LIMIT, data_end - data);
+                    return XDP_DROP;
+                }
+            }
         } else if (ip->protocol == IPPROTO_UDP) {
             struct udphdr *udp = (void *)ip + (ip->ihl * 4);
             if ((void *)(udp + 1) > data_end) {
@@ -201,6 +240,14 @@ int thor_xdp_drop(struct xdp_md *ctx)
             }
             src_port = udp->source;
             dst_port = udp->dest;
+        } else if (ip->protocol == IPPROTO_ICMP) {
+            struct icmphdr *icmp = (void *)ip + (ip->ihl * 4);
+            if ((void *)(icmp + 1) > data_end) {
+                if (stats) __sync_fetch_and_add(&stats->malformed_packets, 1);
+                return XDP_DROP;
+            }
+            // Optional: Block ICMP Redirects or large pings
+            if (icmp->type == ICMP_REDIRECT) return XDP_DROP;
         }
 
         if (src_port && bpf_map_lookup_elem(&thor_blocklist_ports, &src_port)) {
@@ -235,9 +282,6 @@ int thor_xdp_drop(struct xdp_md *ctx)
         return XDP_PASS;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // PATH B — IPv6
-    // ══════════════════════════════════════════════════════════════════════════
     if (eth_proto == ETH_P_IPV6) {
         struct ipv6hdr *ip6 = (void *)(eth + 1);
         if ((void *)(ip6 + 1) > data_end) {
@@ -250,7 +294,6 @@ int thor_xdp_drop(struct xdp_md *ctx)
                 __sync_fetch_and_add(&stats->ip_blocklist_hits, 1);
                 __sync_fetch_and_add(&stats->packets_dropped, 1);
             }
-            // Emit with zero IPv4 fields to signal IPv6 drop to user-space
             emit_drop_event(0, 0, 0, 0,
                             ip6->nexthdr, DROP_REASON_BLOCKLIST,
                             data_end - data);
@@ -292,7 +335,6 @@ int thor_xdp_drop(struct xdp_md *ctx)
         return XDP_PASS;
     }
 
-    // All other protocols (ARP, MPLS, etc.) — pass through
     return XDP_PASS;
 }
 
