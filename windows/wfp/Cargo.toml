@@ -1,0 +1,16 @@
+[package]
+name        = "thor-wfp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Thor Windows Filtering Platform (WFP) network driver — Phase 2"
+
+# ── Note ──────────────────────────────────────────────────────────────────────
+# This crate is intentionally excluded from the workspace build on Linux.
+# To build the WFP driver, use the Windows WDK toolchain:
+#   cargo build --target x86_64-pc-windows-msvc
+# ──────────────────────────────────────────────────────────────────────────────
+
+[dependencies]
+# Windows driver bindings will be added in Phase 2:
+# windows-drivers = "0.2"  # https://github.com/microsoft/windows-drivers-rs
