@@ -1,0 +1,71 @@
+---
+# ─── PodDisruptionBudget: Thor Control Plane ──────────────────────────────────
+# Ensures at least 2 Control Plane replicas stay running during:
+#   - kubectl drain (node maintenance)
+#   - Rolling deploys
+#   - Cloud provider node lifecycle events
+#
+# References: thor-control-deployment.yaml (3 replicas)
+# Roadmap: Phase 4 — HA with minAvailable=2 in k8s leases
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: thor-control-pdb
+  namespace: thor-firewall
+  labels:
+    app: thor-control
+    tier: control-plane
+spec:
+  # CRITICAL: Always keep at least 2 replicas running.
+  # With 3 replicas, only 1 can be disrupted at a time.
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: thor-control
+
+---
+# ─── PodDisruptionBudget: Thor Agent DaemonSet ────────────────────────────────
+# For DaemonSet pods, PDB controls how many nodes can be drained simultaneously.
+# maxUnavailable: 1 means only 1 node can lose its Thor Agent at a time.
+# This ensures network coverage is never completely lost on any subnet.
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: thor-agent-pdb
+  namespace: thor-firewall
+  labels:
+    app: thor-agent
+    tier: data-plane
+spec:
+  # For DaemonSet pods: at most 1 node can be unprotected at a time.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: thor-agent
+
+---
+# ─── Lease: Control Plane leader election ────────────────────────────────────
+# The Control Plane uses Kubernetes Lease objects for leader election.
+# Only one replica acts as "primary" (processes alerts, schedules SOAR actions).
+# Other replicas are hot standbys — they take over within <30s if primary fails.
+#
+# Setup: add --leader-elect=true to control plane args, reference this lease.
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: thor-control-leader
+  namespace: thor-firewall
+  labels:
+    app: thor-control
+spec:
+  # holderIdentity is set at runtime by the elected leader pod
+  # leaseDurationSeconds: 15 (default) — failover latency
+  # renewDeadline: 10s — leader must renew every 10s or lose election
+  # retryPeriod: 2s — candidates retry election every 2s
+  leaseDurationSeconds: 15
+  renewTime: null          # populated at runtime
+  holderIdentity: null     # populated at runtime
+  acquireTime: null        # populated at runtime
+  leaseTransitions: 0
