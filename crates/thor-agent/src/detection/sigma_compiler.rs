@@ -45,7 +45,7 @@ pub struct SigmaRuleFile {
 pub struct SigmaDetectionBlock {
     pub condition: Option<String>,
     #[serde(flatten)]
-    pub selections: HashMap<String, serde_yaml::Value>,
+    pub selections: HashMap<String, serde_yml::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -171,7 +171,7 @@ pub struct SigmaCompiler;
 impl SigmaCompiler {
     pub fn compile_file(content: &str) -> Result<CompiledSigmaRule> {
         let rule: SigmaRuleFile =
-            serde_yaml::from_str(content).context("YAML parse error")?;
+            serde_yml::from_str(content).context("YAML parse error")?;
 
         let level = rule
             .level
@@ -541,11 +541,11 @@ fn split_top_level<'a>(s: &'a str, sep: &str) -> Option<Vec<&'a str>> {
 
 // ─── Selection compilation ────────────────────────────────────────────────────
 
-fn compile_selection(name: &str, val: &serde_yaml::Value) -> Result<Vec<SelectionMatcher>> {
+fn compile_selection(name: &str, val: &serde_yml::Value) -> Result<Vec<SelectionMatcher>> {
     let mut matchers = Vec::new();
 
     match val {
-        serde_yaml::Value::Mapping(map) => {
+        serde_yml::Value::Mapping(map) => {
             for (k, v) in map {
                 let field_name = k.as_str().unwrap_or("").to_string();
                 let negate = field_name.ends_with("|not");
@@ -593,7 +593,7 @@ fn compile_selection(name: &str, val: &serde_yaml::Value) -> Result<Vec<Selectio
                 }
             }
         }
-        serde_yaml::Value::Sequence(_) => {
+        serde_yml::Value::Sequence(_) => {
             let patterns = extract_strings_from_yaml(val);
             if !patterns.is_empty() {
                 if let Ok(ac) = AhoCorasick::builder()
@@ -616,27 +616,27 @@ fn compile_selection(name: &str, val: &serde_yaml::Value) -> Result<Vec<Selectio
     Ok(matchers)
 }
 
-pub fn extract_strings_from_yaml(val: &serde_yaml::Value) -> Vec<String> {
+pub fn extract_strings_from_yaml(val: &serde_yml::Value) -> Vec<String> {
     let mut out = Vec::new();
     match val {
-        serde_yaml::Value::String(s) => {
+        serde_yml::Value::String(s) => {
             let cleaned = s.replace('*', "").replace('?', "");
             if cleaned.len() >= 3 {
                 out.push(cleaned);
             }
         }
-        serde_yaml::Value::Sequence(seq) => {
+        serde_yml::Value::Sequence(seq) => {
             for v in seq {
                 out.extend(extract_strings_from_yaml(v));
             }
         }
-        serde_yaml::Value::Mapping(map) => {
+        serde_yml::Value::Mapping(map) => {
             for (_, v) in map {
                 out.extend(extract_strings_from_yaml(v));
             }
         }
-        serde_yaml::Value::Bool(b) => out.push(b.to_string()),
-        serde_yaml::Value::Number(n) => out.push(n.to_string()),
+        serde_yml::Value::Bool(b) => out.push(b.to_string()),
+        serde_yml::Value::Number(n) => out.push(n.to_string()),
         _ => {}
     }
     out
