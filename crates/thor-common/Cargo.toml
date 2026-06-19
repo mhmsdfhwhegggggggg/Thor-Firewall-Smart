@@ -1,11 +1,31 @@
 [package]
-name = "thor-common"
-version = "0.1.0"
-edition = "2021"
+name        = "thor-common"
+description = "Thor Firewall Smart — shared types, event schema, and mTLS utilities"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
-tokio = { workspace = true, optional = true }
-serde = { workspace = true, features = ["derive"] }
+# Serialization
+serde      = { workspace = true }
 serde_json = { workspace = true }
-rustls = { version = "0.22", features = ["ring"] }
-tonic = { version = "0.11", features = ["tls", "transport"] }
+chrono     = { workspace = true }
+uuid       = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Error handling
+anyhow    = { workspace = true }
+thiserror = { workspace = true }
+
+# mTLS / Zero-Trust (Phase 0 — CISO requirement)
+rcgen          = { workspace = true }
+rustls         = { workspace = true }
+tokio-rustls   = { workspace = true }
+rustls-pemfile = { workspace = true }
+webpki-roots   = { workspace = true }
+
+# Hashing (for event dedup fingerprinting)
+sha2   = { workspace = true }
+blake3 = { workspace = true }
