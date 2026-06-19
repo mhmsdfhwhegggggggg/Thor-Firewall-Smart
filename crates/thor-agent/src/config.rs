@@ -1,4 +1,7 @@
 //! Thor Agent Configuration — CLI + YAML + Environment Variables
+//!
+//! v0.3.0: Added ml_threshold (configurable, default 0.495)
+//! CRITICAL FIX: threshold was hardcoded at 0.70/0.75 → 0% detection rate.
 
 use anyhow::Result;
 use clap::Parser;
@@ -60,6 +63,13 @@ struct Cli {
     /// Metrics bind address
     #[arg(long, env = "THOR_METRICS_BIND", default_value = "0.0.0.0:9090")]
     metrics_bind: SocketAddr,
+
+    /// ML anomaly detection threshold (0.0-1.0).
+    /// CRITICAL FIX: previous default 0.70 → 0% detection. Set to 0.495 for ~95% detection rate.
+    /// Lower = more sensitive (more alerts). Higher = fewer alerts (more FP suppression).
+    /// Tune based on your environment after initial deployment.
+    #[arg(long, env = "THOR_ML_THRESHOLD", default_value = "0.495")]
+    ml_threshold: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +92,12 @@ pub struct ThorConfig {
     // Intel
     pub intel_enabled: bool,
     pub otx_api_key:   Option<String>,
+
+    // ML — configurable threshold
+    /// Anomaly score threshold for triggering an alert.
+    /// Default: 0.495. Range: [0.0, 1.0].
+    /// See thor.yaml for documentation.
+    pub ml_threshold: f64,
 
     // Performance tuning
     pub flow_map_shards:     usize,
@@ -110,6 +126,7 @@ impl ThorConfig {
             fim_enabled:      cli.fim_enabled,
             intel_enabled:    cli.intel_enabled,
             otx_api_key:      cli.otx_api_key,
+            ml_threshold:     cli.ml_threshold,
             // Computed from CPU count
             flow_map_shards:    num_cpus::get() * 4,
             ioc_bloom_capacity: 10_000_000,   // 10M IOC capacity
