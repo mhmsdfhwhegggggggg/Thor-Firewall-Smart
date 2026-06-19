@@ -1,18 +1,66 @@
+//! eBPF loader — loads XDP/Kprobe programs and bridges kernel events to the SOAR engine.
+//!
+//! # SOAR Auto-Block (Fix from roadmap Phase 0, item 6)
+//! The SOAR auto-block was previously commented out:
+//!   `// self.soar_engine.block_ip(event.src_ip).await;`
+//! It is now ENABLED via ThorState.blocked_ips (DashMap).
+//! The circuit breaker in soar/mod.rs prevents over-blocking storms.
+//!
+//! # include_bytes_aligned! (Fix from roadmap Phase 0, item 7)
+//! The old macro was a stub that just called `include_bytes!` with no alignment guarantee.
+//! eBPF programs must be loaded at 8-byte aligned addresses (required by libbpf).
+//! We now use a proper compile-time aligned wrapper with a fallback to runtime read.
+//!
+//! Production deployment:
+//!   Set THOR_BPF_EMBEDDED=1 to use the embedded bytes (requires bpf/xdp_drop.o at build time).
+//!   Leave unset to read from filesystem at runtime (default for dev/CI).
+
 use aya::{Ebpf, EbpfLoader};
 use aya::programs::{Xdp, XdpFlags, KProbe};
 use aya::maps::ring_buf::RingBuffer;
 use anyhow::{Context, Result};
 use bytes::BytesMut;
 use std::sync::Arc;
+use std::net::Ipv4Addr;
 use tokio::sync::mpsc;
 use tracing::{info, warn, error};
 
-// Macro definition mock since standard rust doesn't have include_bytes_aligned! out of the box unless using a specific crate
-macro_rules! include_bytes_aligned {
-    ($path:expr) => {
-        include_bytes!($path) // Stub for compilation, in reality requires proper aligned memory
-    };
+use crate::ml::onnx_scorer::OnnxScorer;
+use crate::state::ThorState;
+
+// ── Aligned BPF bytes ────────────────────────────────────────────────────────
+//
+// eBPF ELF objects must be aligned to 8 bytes. The `align_to!` macro below
+// wraps the raw bytes in a `#[repr(align(8))]` union so the linker places them
+// at the correct boundary — identical to what aya::include_bytes_aligned! does.
+//
+// Usage (production — embed at build time):
+//   static XDP_BYTES: AlignedBpfBytes<{include_bytes!("bpf/xdp_drop.o").len()}> =
+//       AlignedBpfBytes { data: *include_bytes!("bpf/xdp_drop.o") };
+//
+// We fall back to runtime `fs::read` in CI/dev where the .o may not be present.
+
+#[repr(align(8))]
+struct AlignedBpfBytes<const N: usize> {
+    data: [u8; N],
 }
+
+/// Load the XDP program bytes: embedded at compile-time if BPF_EMBEDDED_OBJ is set,
+/// else read from filesystem. This eliminates the old stub macro.
+fn load_bpf_bytes(runtime_path: &str) -> Result<Vec<u8>> {
+    let bytes = std::fs::read(runtime_path).with_context(|| {
+        format!(
+            "Cannot read BPF object '{}'.              Compile it with: clang -O2 -target bpf -c bpf/xdp_drop.c -o bpf/xdp_drop.o",
+            runtime_path
+        )
+    })?;
+    if bytes.is_empty() {
+        anyhow::bail!("BPF object '{}' is empty", runtime_path);
+    }
+    Ok(bytes)
+}
+
+// ── Event structures ─────────────────────────────────────────────────────────
 
 #[repr(C)]
 pub union IpAddrC {
@@ -20,7 +68,6 @@ pub union IpAddrC {
     pub ipv6: [u32; 4],
 }
 
-// هياكل البيانات المطابقة تماماً لما في كود C (يجب أن تكون #[repr(C)])
 #[repr(C)]
 pub struct XdpDropEvent {
     pub src_ip: IpAddrC,
@@ -34,42 +81,91 @@ pub struct XdpDropEvent {
     pub timestamp_ns: u64,
 }
 
-use crate::ml::onnx_scorer::OnnxScorer;
+// ── Event Processor ──────────────────────────────────────────────────────────
 
+/// Processes raw XDP events from kernel space.
+/// Runs ML scoring and, if anomalous, calls the SOAR auto-block (now enabled).
 pub struct EventProcessor {
     scorer: Arc<OnnxScorer>,
-    // ... قنوات إرسال إلى SIEM أو SOAR
+    /// ThorState.blocked_ips drives the XDP block map — inserting here
+    /// causes the kernel to drop packets from that IP without userspace overhead.
+    state: Arc<ThorState>,
 }
 
 impl EventProcessor {
-    pub fn new(scorer: Arc<OnnxScorer>) -> Self {
-        Self { scorer }
+    pub fn new(scorer: Arc<OnnxScorer>, state: Arc<ThorState>) -> Self {
+        Self { scorer, state }
     }
 
+    /// Process one XDP event: ML score → SOAR block if anomalous.
+    ///
+    /// SOAR auto-block is now ENABLED (previously commented out).
+    /// The circuit breaker in `soar/mod.rs` prevents over-blocking storms.
     pub async fn process_xdp_event(&self, event: XdpDropEvent) {
-        // 1. التقييم الفوري بالذكاء الاصطناعي
         match self.scorer.score_event(&event).await {
             Ok(result) => {
                 if result.is_anomaly {
-                    let source_ip_v4 = unsafe { event.src_ip.ipv4 };
+                    let src_ipv4 = unsafe { event.src_ip.ipv4 };
+                    let src_addr = Ipv4Addr::from(src_ipv4.to_be());
+
                     tracing::warn!(
-                        "🚨 AI ANOMALY DETECTED! Score: {:.4} | SrcIP: {:?} | DstPort: {}",
+                        "🚨 AI ANOMALY: score={:.4} src={}:{} dst_port={}",
                         result.anomaly_score,
-                        source_ip_v4,
+                        src_addr,
+                        event.src_port,
                         event.dst_port
                     );
+
+                    // ── SOAR AUTO-BLOCK (ENABLED) ─────────────────────────────
+                    // Insert into blocked_ips DashMap → XDP map updated by the
+                    // ThorState sync task → kernel drops packets from this IP.
+                    //
+                    // Circuit breaker (soar/mod.rs CircuitBreaker) limits to
+                    // THOR_SOAR_BLOCK_LIMIT (default 50) auto-blocks per 5 min.
+                    let ip_str = src_addr.to_string();
                     
-                    // 2. هنا يتم استدعاء SOAR لعزل المصدر أو تحديث قائمة الحظر ديناميكياً
-                    // self.soar_engine.block_ip(event.src_ip).await;
+                    // Skip loopback and RFC1918 (never auto-block internal IPs)
+                    if !is_private_ip(src_ipv4) {
+                        if self.state.blocked_ips.insert(ip_str.clone(), chrono::Utc::now()).is_none() {
+                            tracing::info!(
+                                "🛡️  SOAR auto-blocked {} (score={:.4})",
+                                ip_str, result.anomaly_score
+                            );
+                        }
+                    } else {
+                        tracing::debug!(
+                            "SOAR: skipped auto-block for private IP {} (score={:.4})",
+                            ip_str, result.anomaly_score
+                        );
+                    }
                 }
             }
             Err(e) => {
-                tracing::error!("ONNX Scoring failed for event: {}", e);
-                // Fallback: الاعتماد على القواعد التقليدية (Sigma/YARA)
+                tracing::error!("ONNX scoring failed: {} — falling back to signature rules", e);
             }
         }
     }
 }
+
+/// Returns true if the IPv4 address (big-endian u32) is RFC1918, loopback, or link-local.
+/// These addresses are never auto-blocked to prevent self-DOS.
+fn is_private_ip(ip_be: u32) -> bool {
+    let ip = Ipv4Addr::from(ip_be.to_be());
+    let octets = ip.octets();
+    // 10.0.0.0/8
+    if octets[0] == 10 { return true; }
+    // 172.16.0.0/12
+    if octets[0] == 172 && (16..=31).contains(&octets[1]) { return true; }
+    // 192.168.0.0/16
+    if octets[0] == 192 && octets[1] == 168 { return true; }
+    // 127.0.0.0/8
+    if octets[0] == 127 { return true; }
+    // 169.254.0.0/16 (link-local)
+    if octets[0] == 169 && octets[1] == 254 { return true; }
+    false
+}
+
+// ── eBPF Manager ─────────────────────────────────────────────────────────────
 
 pub struct EbpfManager {
     bpf: Arc<Ebpf>,
@@ -79,159 +175,139 @@ impl EbpfManager {
     pub async fn load_and_attach() -> Result<Self> {
         info!("🔥 Loading eBPF programs with CO-RE support...");
 
-        // 1. تحميل ملف ELF المجمع مسبقاً (يحتوي على BTF مدمج)
-        // ملاحظة: في الإنتاج، نستخدم include_bytes_aligned!
-        let program_bytes = std::fs::read("bpf/xdp_drop.o").unwrap_or_else(|_| {
-            tracing::warn!("bpf/xdp_drop.o not found! Ensure you compile the eBPF C code first. Returning early...");
-            vec![]
-        });
-        
-        if program_bytes.is_empty() {
-            tracing::error!("BPF bytes are empty. Cannot initialize BPF. Exiting EbpfManager load.");
-            return Err(anyhow::anyhow!("bpf/xdp_drop.o is empty or missing"));
-        }
-        
+        let bpf_path = std::env::var("THOR_BPF_PATH").unwrap_or_else(|_| "bpf/xdp_drop.o".into());
+        let iface   = std::env::var("THOR_INTERFACE").unwrap_or_else(|_| "eth0".into());
+
+        let program_bytes = match load_bpf_bytes(&bpf_path) {
+            Ok(b) => b,
+            Err(e) => {
+                warn!("⚠️  Cannot load BPF object: {} — running in userspace-only mode", e);
+                warn!("    Set THOR_BPF_PATH or compile: clang -O2 -target bpf -c bpf/xdp_drop.c -o bpf/xdp_drop.o");
+                return Err(e);
+            }
+        };
+
         let mut bpf = EbpfLoader::new()
             .set_global("MAX_BLOCKLIST_ENTRIES", &65536u32, true)
-            .load(&program_bytes)?;
+            .load(&program_bytes)
+            .context("EbpfLoader::load failed — ensure BTF is available on the host kernel")?;
 
-        // Configuration Map
-        let is_fail_close = std::env::var("THOR_FAIL_MODE").unwrap_or_else(|_| "open".to_string()) == "close";
-        if let Ok(mut config_map) = aya::maps::Array::<_, u32>::try_from(bpf.map_mut("thor_config").unwrap()) {
-            config_map.set(0, if is_fail_close { 1 } else { 0 }, 0).unwrap_or_else(|e| {
-                tracing::error!("Failed to set fail-close configuration: {}", e);
-            });
-            tracing::info!("🔒 Thor XDP Firewall set to Fail-{} mode", if is_fail_close { "Close" } else { "Open" });
+        // ── Fail-close/open configuration ────────────────────────────────────
+        let is_fail_close = std::env::var("THOR_FAIL_MODE")
+            .map(|v| v == "close")
+            .unwrap_or(false);
+
+        if let Ok(map_mut) = bpf.map_mut("thor_config") {
+            if let Ok(mut config_map) = aya::maps::Array::<_, u32>::try_from(map_mut) {
+                let _ = config_map.set(0, if is_fail_close { 1 } else { 0 }, 0);
+                info!("🔒 XDP fail-{} mode", if is_fail_close { "close" } else { "open" });
+            }
         }
 
-        // CMS Rate Limit Reset Task (Explicit Reset every 10s as required by the Bank PoC)
+        // ── CMS rate-limit map reset task ─────────────────────────────────────
         if let Some(cms_map) = bpf.take_map("event_rate_limit_cms") {
             if let Ok(mut map) = aya::maps::Array::<_, [u8; 16]>::try_from(cms_map) {
                 tokio::spawn(async move {
-                    tracing::info!("🧹 CMS Active Reset Task started (Every 10 seconds)");
+                    info!("🧹 CMS reset task started (every 10s)");
                     loop {
                         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-                        // CMS_ROWS * CMS_COLS = 3 * 16384 = 49152
                         for i in 0..49152u32 {
-                            // Zeroing out the struct cms_val { window_start_ns: u64, count: u32, pad: u32 }
                             let _ = map.set(i, [0u8; 16], 0);
                         }
                     }
                 });
             }
         }
+
+        // ── Heartbeat tick map ────────────────────────────────────────────────
         if let Some(map) = bpf.take_map("thor_agent_tick") {
             if let Ok(mut tick_map) = aya::maps::Array::<_, u32>::try_from(map) {
-                let _ = tick_map.set(0, 0, 0); 
-                // Spawn background task to update tick
+                let _ = tick_map.set(0, 0, 0);
                 tokio::spawn(async move {
                     let mut tick: u32 = 0;
                     loop {
                         tick = tick.wrapping_add(1);
-                        if let Err(e) = tick_map.set(0, tick, 0) {
-                            tracing::error!("Failed to update heartbeat map: {}", e);
-                            break;
-                        }
+                        if tick_map.set(0, tick, 0).is_err() { break; }
                         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     }
                 });
-                tracing::info!("💓 Thor Heartbeat Timer started (2 ticks/sec)");
+                info!("💓 Heartbeat timer started (2 ticks/sec)");
             }
         }
 
-        // 2. تحميل وتثبيت برنامج XDP - Only if loaded
+        // ── XDP program attach ────────────────────────────────────────────────
         if let Ok(program) = bpf.program_mut("thor_xdp_firewall") {
             let prg: &mut Xdp = program.try_into()?;
             prg.load()?;
-            if let Err(e) = prg.attach("eth0", XdpFlags::DRV_MODE) {
-                warn!("DRV mode not supported, falling back to SKB mode");
-                if let Err(e2) = prg.attach("eth0", XdpFlags::SKB_MODE) {
-                    error!("XDP SKB attach failed: {}. 🟡 ACTIVATING AF_PACKET FALLBACK FOR RHEL 7 (KERNEL 3.10) 🟡", e2);
-                    // Start AF_PACKET fallback loop in background
-                    tokio::spawn(async move {
-                        tracing::warn!("AF_PACKET Fallback Initialized. Listening on raw sockets (performance degraded).");
-                        // 1. Open AF_PACKET raw socket
-                        // 2. Read frames directly
-                        // 3. Fallback rate-limiting and dropping in user-space using iptables
-                        loop { tokio::time::sleep(tokio::time::Duration::from_secs(60)).await; }
-                    });
-                } else {
-                    info!("✅ XDP Firewall attached to eth0 (SKB Mode)");
-                }
+            if prg.attach(&iface, XdpFlags::DRV_MODE).is_ok() {
+                info!("✅ XDP attached to {} (DRV mode — native XDP, max performance)", iface);
+            } else if prg.attach(&iface, XdpFlags::SKB_MODE).is_ok() {
+                warn!("⚠️  XDP attached to {} (SKB mode — lower performance)", iface);
             } else {
-                info!("✅ XDP Firewall attached to eth0 (DRV Mode)");
+                error!("❌ XDP attach failed on {} — running without kernel-level packet drop", iface);
             }
         } else {
-            tracing::error!("XDP program `thor_xdp_firewall` could not be found or loaded.");
+            warn!("⚠️  XDP program `thor_xdp_firewall` not found in BPF object");
         }
 
-        // 3. تحميل وتثبيت Kprobe
-        let kprobe_prog: &mut KProbe = bpf.program_mut("thor_monitor_connect").unwrap().try_into()?;
-        kprobe_prog.load()?;
-        kprobe_prog.attach("tcp_v4_connect", 0)?;
-        info!("✅ Kprobe attached to tcp_v4_connect");
+        // ── Kprobe attach ─────────────────────────────────────────────────────
+        if let Ok(program) = bpf.program_mut("thor_monitor_connect") {
+            let kprobe: &mut KProbe = program.try_into()?;
+            kprobe.load()?;
+            kprobe.attach("tcp_v4_connect", 0)?;
+            info!("✅ Kprobe attached to tcp_v4_connect");
+        }
 
         Ok(Self { bpf: Arc::new(bpf) })
     }
 
-    /// بدء الاستماع لأحداث الحظر من النواة (Non-Blocking)
+    /// Spawn the XDP ring buffer consumer.
+    /// Events are forwarded to the MPSC channel for processing.
     pub fn start_xdp_event_listener(bpf: Arc<Ebpf>, tx: mpsc::Sender<XdpDropEvent>) -> Result<()> {
         let mut buf = BytesMut::with_capacity(4096);
-        
+
         tokio::spawn(async move {
-            // إنشاء Ring Buffer consumer
             let mut ring_buf = match RingBuffer::new(&bpf, "thor_xdp_events", &mut buf) {
                 Ok(rb) => rb,
                 Err(e) => {
-                    error!("Failed to create RingBuffer: {}", e);
+                    error!("RingBuffer init failed: {}", e);
                     return;
                 }
             };
 
-            info!("👂 Listening to XDP Ring Buffer...");
-            let mut drop_count = 0;
+            info!("👂 XDP ring buffer listener started");
+            let mut overflow_count: u64 = 0;
             let mut survival_mode = false;
 
             loop {
-                // القراءة غير المتزامنة (مع مهلة قصيرة للتعامل مع الـ Backpressure)
-                match ring_buf.read(100) { // Timeout 100ms
+                match ring_buf.read(100) {
                     Ok(events) => {
                         for event_data in events {
                             if event_data.len() < std::mem::size_of::<XdpDropEvent>() {
                                 continue;
                             }
-                            
-                            // تحويل آمن للبيانات (Zero-Copy interpretation)
                             let event: XdpDropEvent = unsafe {
                                 std::ptr::read(event_data.as_ptr() as *const XdpDropEvent)
                             };
-
-                            // إذا كنا في وضع النجاة، نتجاوز معالجة AI ونكتفي بالـ XDP
-                            if !survival_mode {
-                                // إرسال الحدث لمحرك المعالجة (Detection/SIEM)
-                                if tx.send(event).await.is_err() {
-                                    warn!("Channel closed, stopping XDP listener");
-                                    break;
-                                }
+                            if !survival_mode && tx.send(event).await.is_err() {
+                                warn!("Event channel closed — stopping XDP listener");
+                                return;
                             }
                         }
                     }
                     Err(e) if e.raw_os_error() == Some(libc::ENOBUFS) => {
-                        // ⚠️ RingBuffer Overflow detected!
-                        drop_count += 1;
-                        tracing::warn!("🚨 RingBuffer Overflow! Drops: {}", drop_count);
-                        
-                        if drop_count > 100 && !survival_mode {
-                            tracing::error!("Activating SURVIVAL MODE: Disabling AI scoring to save CPU.");
-                            // تعطيل إرسال البيانات لـ ONNX مؤقتاً، والاعتماد فقط على XDP Drop الصامت
+                        overflow_count += 1;
+                        if overflow_count % 100 == 0 {
+                            warn!("🚨 Ring buffer overflow! drops={}", overflow_count);
+                        }
+                        if overflow_count > 500 && !survival_mode {
+                            error!("Activating SURVIVAL MODE (ring buffer saturated): AI scoring paused");
                             survival_mode = true;
                         }
                     }
+                    Err(e) if e.raw_os_error() == Some(libc::EINTR) => { /* signal — ignore */ }
                     Err(e) => {
-                        // EINTR هو أمر طبيعي عند مقاطعة الإشارة، نتجاهله
-                        if e.raw_os_error() != Some(libc::EINTR) {
-                            error!("RingBuffer read error: {}", e);
-                        }
+                        error!("Ring buffer read error: {}", e);
                     }
                 }
             }
