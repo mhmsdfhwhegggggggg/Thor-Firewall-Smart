@@ -1,5 +1,62 @@
 # Thor Firewall Smart — Changelog
 
+## [v0.3.0] — Phase 0: Zero-Trust Foundation (2026-06-19)
+
+### 🏗️ Architecture — Workspace Modularization
+- **Fixed** workspace `Cargo.toml`: added 6 previously-orphaned crates:
+  `thor-agent-net`, `thor-agent-web`, `thor-agent-srv`,
+  `thor-soc-slm`, `thor-xdp`, `thor-xdp-ebpf`
+- Bumped workspace version to `0.3.0`
+- Added mTLS dependency block: `rcgen`, `rustls 0.23`, `tokio-rustls 0.26`,
+  `rustls-pemfile`, `webpki-roots`
+
+### 🔐 Security — mTLS Zero-Trust (CISO Requirement)
+- **New `crates/thor-common/src/crypto.rs`** — full production mTLS implementation:
+  - `ThorCertAuthority::generate()` — self-signed CA (5-year lifetime)
+  - `ThorCertAuthority::issue_agent_cert()` — short-lived agent certs (72 h, SPIFFE URI SAN)
+  - `ThorCertAuthority::server_tls_config()` — Control-Plane `ServerConfig` with mandatory client cert verification
+  - `ThorCertAuthority::agent_client_config()` — Agent `ClientConfig` with CA pinning
+  - 3 unit tests (CA generation, cert issuance, full server+client config roundtrip)
+- Replaced broken `rustls::client::NoServerCertVerifier` stub with production-safe code
+
+### 📐 Schema — Unified Event Protocol
+- **New `UnifiedThorEvent`** in `thor-common/src/lib.rs` — canonical event schema:
+  - `EventDetails::Network(NetworkEventDetails)` — L3/L4: src/dst IP+port, TCP flags, IOC match
+  - `EventDetails::Web(WebEventDetails)` — L7: method, URI, anomaly score, signatures, payload hash
+  - `EventDetails::Server(ServerEventDetails)` — EDR: PID, PPID, cmdline, FIM hash
+  - `AgentPlatform` enum (Linux / Windows / Container)
+  - Action enums: `NetworkAction`, `WebAction`, `ServerAction`
+  - `WebThreatCategory` (SQLi, XSS, PathTraversal, CommandInjection, Log4Shell, WebShell…)
+  - Auto-derives `threat_level` and `description` on construction
+  - 3 unit tests
+
+### ⚙️ Infrastructure
+- **New `.github/workflows/ci.yml`** — full CI pipeline:
+  - Rust stable + nightly matrix
+  - `cargo check` on all workspace members
+  - `cargo test --lib` (no eBPF kernel code in CI)
+  - `cargo clippy -- -D warnings`
+  - `cargo fmt --check`
+- **New `configs/envoy/envoy.yaml`** — Envoy Proxy Cluster config (Phase 2 foundation):
+  - TLS 1.3 listener on port 8443
+  - Cluster with outlier detection + health checks
+  - JWT + ext_authz filter wired to `thor-agent-web` on port 8082
+  - Access log to `/var/log/thor/envoy-access.log`
+- **New `windows/wfp/src/lib.rs`** — Windows Filtering Platform (WFP) stub:
+  - Documents the `FWPM_FILTER0` + `FwpmFilterAdd0` call path for future NDIS LWF driver
+
+### 📝 Documentation
+- **New `IMPLEMENTATION_STATUS_AR.md`** — honest % completion per module:
+  - Network Agent: 25% → target 100% (Phase 1)
+  - Web Agent: 35% → target 100% (Phase 1)
+  - Server EDR: 20% → target 100% (Phase 1)
+  - SOC Control Plane: 12% → target 100% (Phase 2)
+  - AI/SLM Engine: 8% → target 100% (Phase 3)
+  - Windows Support: 3% → target 100% (Phase 2)
+  - mTLS / Zero-Trust: **100%** ✅ (this release)
+
+---
+
 ## [v0.2.0] — Axis 1: Detection Foundation (2025-06-16)
 
 ### 🆕 ThorFIM — File Integrity Monitoring
