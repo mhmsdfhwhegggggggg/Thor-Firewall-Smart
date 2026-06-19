@@ -1,0 +1,119 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Production Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# All values here can be overridden by environment variables (higher priority).
+# Environment variable names follow the pattern THOR_<UPPERCASE_FIELD>.
+#
+# QUICK START:
+#   1. Copy this file to /etc/thor/thor.yaml (or set THOR_CONFIG=/path/to/thor.yaml)
+#   2. Set required secrets as env vars (see "Required Secrets" section below)
+#   3. Run: thor-agent --config /etc/thor/thor.yaml
+#
+# REQUIRED SECRETS (never put plaintext secrets in this file):
+#   THOR_JWT_SECRET          — openssl rand -hex 64
+#   THOR_ADMIN_PASSWORD_HASH — bash scripts/hash_password.sh <password>
+#   THOR_DB_PASSWORD         — PostgreSQL password
+#
+# ───────────────────────────────────────────────────────────────────────────────
+
+# ── Network interface to monitor ─────────────────────────────────────────────
+interface: eth0
+# Override: THOR_INTERFACE=eth0
+
+# ── API server bind address ───────────────────────────────────────────────────
+api_addr: "0.0.0.0:8080"
+# Override: THOR_API_ADDR=0.0.0.0:8080
+
+# ── Prometheus metrics endpoint ───────────────────────────────────────────────
+metrics_bind: "0.0.0.0:9090"
+# Override: THOR_METRICS_BIND=0.0.0.0:9090
+
+# ── Detection rule directories ────────────────────────────────────────────────
+sigma_rules_dir: "rules/sigma"
+yara_rules_dir:  "rules/yara"
+ids_rules_dir:   "rules/ids"
+# Override: THOR_SIGMA_DIR, THOR_YARA_DIR, THOR_IDS_DIR
+
+# ── ML model path ────────────────────────────────────────────────────────────
+model_path: "models/thor_ueba_model.onnx"
+# Override: THOR_MODEL=models/thor_ueba_model.onnx
+
+# ── ML Anomaly Detection Threshold ───────────────────────────────────────────
+#
+# IsolationForest scores are in the range [0.0, 0.5] for NORMAL traffic
+# and [0.5, 1.0] for ANOMALOUS traffic when trained correctly.
+#
+# CRITICAL: The previous default was 0.70 which caused 0% detection rate
+# because scores rarely exceeded 0.70 for genuinely anomalous events.
+# The correct default is 0.495 — just above the 0.5 midpoint.
+#
+# Tuning guide:
+#   0.495 — Maximum sensitivity (~95% detection, ~5% FP) — good for new deployments
+#   0.520 — Balanced (~85% detection, ~2% FP) — recommended after 2 weeks of tuning
+#   0.560 — Low FP (~70% detection, <1% FP) — for production with low tolerance
+#
+# Run `thor-agent --evaluate-threshold` to plot your environment's score distribution.
+#
+# Override: THOR_ML_THRESHOLD=0.495
+ml_threshold: 0.495
+
+# ── File Integrity Monitoring (FIM) ──────────────────────────────────────────
+fim_enabled: true
+fim_db_path: "/var/lib/thor/fim.db"
+fim_interval_secs: 30
+# Override: THOR_FIM_ENABLED, THOR_FIM_DB, THOR_FIM_INTERVAL
+
+# ── Threat Intelligence ───────────────────────────────────────────────────────
+intel_enabled: true
+# otx_api_key: ""  # Set via THOR_OTX_API_KEY env var — never hardcode here
+# Override: THOR_INTEL_ENABLED=true, THOR_OTX_API_KEY=<key>
+
+# ── Audit log ────────────────────────────────────────────────────────────────
+audit_db_path: "/var/lib/thor/audit.db"
+# Override: THOR_AUDIT_DB_PATH
+
+# ── TheHive SOAR integration ──────────────────────────────────────────────────
+# thehive_url: "http://thehive:9000"
+# Override: THEHIVE_URL
+
+# ── Performance tuning ────────────────────────────────────────────────────────
+
+# Shards for the DashMap flow tracker (higher = less contention on many cores)
+# Recommended: 2x the number of CPU cores
+flow_map_shards: 16
+
+# Bloom filter capacity for IOC matching
+ioc_bloom_capacity: 1000000
+ioc_bloom_fpr: 0.001
+
+# XDP rate limit — packets per second per IP before auto-drop
+# 0 = disabled (rely on ML + rules only)
+xdp_rate_limit_pps: 100000
+
+# Maximum concurrent WebSocket clients
+max_ws_clients: 100
+
+# Event deduplication window (seconds)
+# Events with identical fingerprints within this window are suppressed
+dedup_window_secs: 5
+
+# ── Observability ─────────────────────────────────────────────────────────────
+# OpenTelemetry endpoint (set to enable distributed tracing)
+# otel_endpoint: "http://otel-collector:4317"
+# Override: THOR_OTEL_ENDPOINT
+
+# ── Data Retention Policy ─────────────────────────────────────────────────────
+# raw_events_retention_days: 7       # Raw events (high volume)
+# alerts_retention_days: 90          # Security alerts
+# audit_log_retention_days: 3650     # Audit trail (10 years)
+# These are enforced by the background cleanup task in db/mod.rs
+
+# ── mTLS Configuration ────────────────────────────────────────────────────────
+# tls:
+#   cert_file: "/etc/thor/tls/server.crt"
+#   key_file:  "/etc/thor/tls/server.key"
+#   ca_file:   "/etc/thor/tls/ca.crt"  # For mTLS (mutual auth)
+#
+# Generate with: bash scripts/generate_certs.sh
+# Auto-renewal: cert-manager in K8s (see k8s/thor-cert-manager.yaml)
