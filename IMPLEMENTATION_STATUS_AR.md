@@ -1,156 +1,120 @@
-# 📊 تقرير حالة التنفيذ التفصيلي — Thor Firewall Smart v0.3.0
+# 📊 تقرير حالة التنفيذ التفصيلي — Thor Firewall Smart v0.4.0
 
-> **آخر تحديث:** 2026-06-19 | **الحالة العامة:** المرحلة 0 مكتملة — تبدأ المرحلة 1
+> **آخر تحديث:** 2026-06-19 | **الحالة العامة:** المرحلة 1 مكتملة — تبدأ المرحلة 2
 
 ---
 
 ## 🗺️ خارطة التقدم الشاملة
 
-| المكوّن | نسبة الاكتمال v0.2.0 | نسبة الاكتمال v0.3.0 | المرحلة التالية |
-|---|---|---|---|
-| **thor-common** (الأنواع المشتركة) | 40% | ✅ **90%** | - |
-| **thor-common/crypto** (mTLS) | 0% | ✅ **100%** | ✅ مكتمل |
-| **thor-common/lib** (UnifiedThorEvent) | 30% | ✅ **95%** | ✅ مكتمل |
-| **thor-bpf** (برامج eBPF) | 60% | 60% | المرحلة 1 |
-| **thor-agent-net** (وكيل الشبكة L3/L4) | 25% | 25% | المرحلة 1 |
-| **thor-agent-web** (وكيل WAF L7) | 35% | 35% | المرحلة 1 |
-| **thor-agent-srv** (وكيل EDR) | 20% | 20% | المرحلة 1 |
-| **thor-ids** (محرك IDS) | 45% | 45% | المرحلة 1 |
-| **thor-script** (محرك Playbooks) | 55% | 55% | المرحلة 2 |
-| **thor-soc-slm** (نموذج SLM) | 8% | 10% | المرحلة 3 |
-| **thor-control-plane** (Control Plane) | 12% | 12% | المرحلة 2 |
-| **Windows WFP Driver** | 2% | 3% | المرحلة 2 |
-| **Envoy Proxy Cluster** | 0% | ✅ **30%** (config) | المرحلة 1 |
-| **CI/CD Pipeline** | 10% | ✅ **80%** | ✅ مكتمل |
-| **Cargo Workspace** | 60% | ✅ **100%** | ✅ مكتمل |
+| المكوّن | v0.2.0 | v0.3.0 | v0.4.0 | المرحلة التالية |
+|---------|--------|--------|--------|-----------------|
+| **thor-common** (الأنواع المشتركة) | 40% | 90% | ✅ **92%** | Phase 1 tail |
+| **thor-common/crypto** (mTLS) | 0% | ✅ **100%** | ✅ **100%** | مكتمل |
+| **thor-common/lib** (UnifiedThorEvent) | 30% | ✅ **95%** | ✅ **95%** | مكتمل |
+| **thor-common/event_channel** | 0% | 0% | ✅ **80%** | Phase 2: reqwest mTLS |
+| **thor-bpf** (برامج eBPF) | 60% | 60% | 60% | المرحلة 2 |
+| **thor-agent-net** (وكيل الشبكة L3/L4) | 25% | 25% | ✅ **70%** | المرحلة 2 |
+| **thor-agent-web** (وكيل WAF L7) | 35% | 35% | ✅ **75%** | المرحلة 2 |
+| **thor-agent-srv** (وكيل EDR) | 20% | 20% | ✅ **65%** | المرحلة 2 |
+| **thor-ids** (محرك IDS) | 45% | 45% | 45% | المرحلة 2 |
+| **thor-script** (محرك Playbooks) | 55% | 55% | 55% | المرحلة 2 |
+| **thor-soc-slm** (نموذج SLM) | 8% | 10% | 10% | المرحلة 3 |
+| **thor-control-plane** (Control Plane) | 12% | 12% | 15% | المرحلة 2 |
+| **Windows WFP Driver** | 2% | 3% | 3% | المرحلة 2 |
+| **Envoy Proxy Cluster** | 0% | 30% | 30% | المرحلة 2 |
+| **CI/CD Pipeline** | 10% | ✅ **80%** | ✅ **85%** | مكتمل |
+| **Cargo Workspace** | 60% | ✅ **100%** | ✅ **100%** | مكتمل |
+| **Integration Tests** | 5% | 10% | ✅ **55%** | Phase 2 |
 
 ---
 
-## ✅ ما تم إنجازه في v0.3.0 (هذا الإصدار)
+## ✅ ما تم إنجازه في v0.4.0 (هذا الإصدار — Phase 1)
 
-### 1️⃣ إصلاح هيكل الـ Workspace (بنية تحتية حرجة)
+### 1️⃣ thor-agent-net — اكتمل بنسبة 70%
 
-**المشكلة التي تم حلها:** كانت 6 crates موجودة فعلياً في مجلد `crates/` لكنها **غير مسجلة** في `Cargo.toml` الرئيسي، مما يعني:
-- لا يمكن تشغيل `cargo build --workspace`
-- لا يمكن تشغيل `cargo test` على الـ crates الجديدة  
-- CI يفشل بصمت
+**الجديد في v0.4.0:**
+- ✅ `check_dns_c2()` — كشف C2 DNS بـ Exact match + Subdomain + DGA Shannon Entropy
+- ✅ `check_rate_limit()` — حد 1000 pps لكل IP مصدر (Token Bucket)
+- ✅ `load_c2_domains()` — تحميل قائمة النطاقات المشبوهة من `/etc/thor/c2-domains.txt`
+- ✅ `NetAgentState` — حالة مشتركة thread-safe عبر DashMap
+- ✅ `NetworkEvent` — حدث مُنظّم للإرسال إلى Control Plane
+- ✅ Prometheus metrics `/metrics` على بورت 9091
+- ✅ 6 اختبارات وحدة
 
-**الحل المطبق:** إضافة جميع الـ crates المفقودة للـ workspace:
-```toml
-"crates/thor-agent-net",   # L3/L4 XDP Network Agent
-"crates/thor-agent-web",   # L7 WAF Web Agent  
-"crates/thor-agent-srv",   # EDR Server Agent
-"crates/thor-soc-slm",     # SOC Small Language Model
-"crates/thor-xdp",         # XDP userspace loader
-"crates/thor-xdp-ebpf",    # eBPF kernel programs
-```
+### 2️⃣ thor-agent-web — اكتمل بنسبة 75%
 
-### 2️⃣ تنفيذ mTLS Zero-Trust (متطلب CISO الأول والأهم)
+**الجديد في v0.4.0:**
+- ✅ `build_owasp_scanner()` — محرك Aho-Corasick بـ 60+ نمط OWASP Top 10
+- ✅ `analyze_request()` — تحليل شامل (URL + Query + Body + Headers)
+- ✅ Log4Shell (CVE-2021-44228) — كشف متخصص لهذه الثغرة الحرجة
+- ✅ `check_rate_limit()` — 300 req/min مع حظر 5 دقائق
+- ✅ `auth_handler()` — معالج POST `/auth` لـ Envoy ext_authz
+- ✅ `AuthResponse` — استجابة مُهيكلة بـ ALLOW/DENY + score + categories
+- ✅ Prometheus metrics على بورت 9092
+- ✅ 6 اختبارات وحدة
 
-**المشكلة التي تم حلها:** كان `crypto.rs` عبارة عن stub معطوب:
-```rust
-// قديم — كود غير صالح (NoServerCertVerifier محذوف من rustls)
-ClientConfig::builder()
-    .with_custom_certificate_verifier(Arc::new(rustls::client::NoServerCertVerifier))
-    .with_no_client_auth()
-```
+### 3️⃣ thor-agent-srv — اكتمل بنسبة 65%
 
-**الحل المطبق — بنية mTLS كاملة:**
-```
-ThorCertAuthority
-├── generate(cn) → CA self-signed (5 years)
-├── issue_agent_cert(agent_id) → Agent cert (SPIFFE SAN, signed by CA)
-├── server_tls_config(cert) → ServerConfig (requires client cert from CA)
-└── agent_client_config(bundle, ca_pem) → ClientConfig (CA-pinned)
-```
+**الجديد في v0.4.0:**
+- ✅ `initialize_fim_baseline()` — بصمة أولية لـ 9 ملفات حرجة
+- ✅ `check_fim()` — كشف أي تغيير بـ FNV-1a hashing
+- ✅ `PROCESS_RULES` — 7 قواعد Sigma لكشف العمليات الخبيثة
+- ✅ `scan_processes()` — مسح دوري كل 5 ثوانٍ
+- ✅ `execute_soar_response()` — KILL_PROCESS + KILL_AND_QUARANTINE stubs
+- ✅ MITRE ATT&CK mapping لكل حادثة
+- ✅ Prometheus metrics على بورت 9093
+- ✅ 6 اختبارات (5 sync + 1 async)
 
-**الضمانات الأمنية:**
-- ✅ كل وكيل يحمل شهادة موقعة من CA الخاصة بـ Thor
-- ✅ Control-Plane يرفض أي اتصال بدون شهادة عميل صالحة
-- ✅ هوية SPIFFE في SAN (spiffe://thor.local/agent/{id})
-- ✅ لا ثقة بـ IP العنوان — الثقة بالشهادة فقط (Zero-Trust)
+### 4️⃣ thor-common/event_channel.rs — جديد (80%)
 
-### 3️⃣ مخطط الأحداث الموحد (Unified Event Schema)
+- ✅ `create_event_channel()` — MPSC channel بسعة 8192
+- ✅ `ForwarderConfig` — إعدادات Control Plane + mTLS
+- ✅ `run_event_forwarder()` — batch flushing (64 events / 500ms)
+- ✅ فلاش فوري للأحداث الحرجة (HIGH/CRITICAL)
 
-**المشكلة:** كل وكيل (Net/Web/Srv) كان يرسل بيانات بشكل مختلف — لا يمكن للـ SOC معالجتها بشكل موحد.
+### 5️⃣ Tests — 18 اختبار تكامل جديد
 
-**الحل:** `UnifiedThorEvent` — مخطط موحد واحد:
-```rust
-UnifiedThorEvent {
-    event_id:          UUID v4,
-    timestamp:         ISO-8601,
-    agent_id:          String,
-    platform:          Linux | Windows | Container,
-    threat_level:      Unknown→Low→Medium→High→Critical,
-    mitre_tactic:      Option<TA0043..TA0040>,
-    details:           Network | Web | Server,
-    soar_action_taken: Option<String>,
-    description:       String,
-}
-```
+ملف: `crates/thor-agent/tests/phase1_agent_integration.rs`
+- net_agent_tests: 4 اختبارات
+- web_agent_tests: 6 اختبارات  
+- srv_agent_tests: 5 اختبارات
+- cross_agent_tests: 3 اختبارات
 
 ---
 
-## 🔜 المرحلة 1 — الأهداف القادمة
+## ✅ ما تم إنجازه في v0.3.0 (المرحلة 0 — للمرجعية)
 
-### أولوية عالية (Critical Path):
+### 1️⃣ إصلاح هيكل الـ Workspace
+- ✅ إضافة 6 crates مفقودة لـ `Cargo.toml` الرئيسي
+- ✅ رفع الإصدار إلى `0.3.0`
 
-**1. thor-agent-net: تحسين XDP + تفعيل mTLS للتواصل مع SOC**
-- [ ] تضمين `UnifiedThorEvent` في أحداث الشبكة المُرسَلة
-- [ ] تفعيل `ThorCertAuthority::agent_client_config()` في الاتصال بالـ SOC
-- [ ] إضافة AF_XDP (zero-copy) للحزم التي تحتاج تحليلاً عميقاً
+### 2️⃣ mTLS Zero-Trust
+- ✅ `ThorCertAuthority::generate()` — CA ذاتية التوقيع
+- ✅ `ThorCertAuthority::issue_agent_cert()` — شهادات قصيرة العمر (72h) + SPIFFE SAN
+- ✅ `ThorCertAuthority::server_tls_config()` / `agent_client_config()`
+- ✅ 3 اختبارات وحدة
 
-**2. thor-agent-web: تحسين WAF + تكامل Coraza**
-- [ ] ربط Coraza WASM كـ fallback محرك كلاسيكي
-- [ ] إضافة `payload_hash` (SHA256) لجميع الأحداث
-- [ ] تحويل `WebAnomalyEvent` إلى `UnifiedThorEvent::Web`
+### 3️⃣ Unified Event Schema
+- ✅ `UnifiedThorEvent` + `EventDetails::{Network, Web, Server}`
+- ✅ `WebThreatCategory`, `NetworkAction`, `ServerAction`
+- ✅ `AgentPlatform` enum
+- ✅ 3 اختبارات وحدة
 
-**3. thor-agent-srv: تعزيز EDR**
-- [ ] إضافة مراقبة الذاكرة (Memory scanning)
-- [ ] ربط `ThorFIM` events بـ `UnifiedThorEvent::Server`
-- [ ] اكتشاف Privilege Escalation عبر ptrace/setuid probes
-
-**4. Envoy Proxy Cluster**
-- [ ] نشر config الـ Envoy المُضاف على staging
-- [ ] ربط `ext_authz` بـ `thor-agent-web:8082` فعلياً
-- [ ] اختبار circuit breaker
-
-### أولوية متوسطة:
-
-**5. Thor Control Plane (SOC Backend)**
-- [ ] تفعيل mTLS على gRPC endpoint
-- [ ] استقبال `UnifiedThorEvent` من الوكلاء الثلاثة
-- [ ] تحديث dashboard لعرض بيانات الـ event الموحد
-
-**6. Windows WFP Driver**
-- [ ] استكمال skeleton NDIS LWF
-- [ ] WFP filter conditions (src/dst IP, port, protocol)
+### 4️⃣ CI/CD Pipeline
+- ✅ `.github/workflows/ci.yml` — cargo check + test + clippy + fmt + audit
+- ✅ eBPF build job (continue-on-error)
 
 ---
 
-## 📈 مؤشرات الأداء (KPIs)
+## 🔜 المرحلة 2 (Phase 2) — الأهداف القادمة
 
-| المقياس | الهدف | الوضع الحالي |
-|---|---|---|
-| XDP throughput | 15-20 Mpps | ✅ حقق في PoC |
-| WAF latency overhead | < 1ms | ✅ حقق (Aho-Corasick) |
-| mTLS handshake time | < 5ms | ✅ حقق (tokio-rustls) |
-| Event pipeline throughput | 1M events/sec | 🔄 يُختبر |
-| False positive rate | < 2% | 🔄 يُقاس |
-| Zero-day detection rate | > 85% | 🔄 يُقاس |
+| الهدف | الأولوية | النسبة المستهدفة |
+|-------|---------|-----------------|
+| gRPC Event Streaming (tonic) | 🔴 عالية | 100% |
+| Coraza WAF Engine (Go wrapper) | 🔴 عالية | 80% |
+| Kernel FIM via eBPF | 🔴 عالية | 85% |
+| thor-control-plane API | 🔴 عالية | 60% |
+| Windows WFP driver | 🟡 متوسطة | 40% |
+| K8s Helm Chart | 🟡 متوسطة | 70% |
 
----
-
-## 🚧 الثغرات المعروفة (Technical Debt)
-
-| الثغرة | الخطورة | الحل المقترح |
-|---|---|---|
-| `thor-agent-srv` يستخدم `sysinfo` فقط بدون eBPF tracepoints | High | ربط `process_monitor.bpf.c` من `thor-bpf` |
-| `thor-soc-slm` يستخدم stub وهمي بدون نموذج حقيقي | High | دمج llama.cpp أو ONNX-Runtime |
-| Control Plane ما زال Plaintext gRPC (قبل هذا الإصدار) | CRITICAL | تفعيل mTLS (تم توفير الأدوات في هذا الإصدار) |
-| `thor-agent-web` لا يُرسل أحداثه للـ SOC بعد | Medium | إضافة HTTP client مع mTLS |
-| `thor-bpf` يحتاج cross-compilation toolchain | Medium | إضافة docker build target في CI |
-
----
-
-*تم إعداد هذا التقرير آلياً بتاريخ 2026-06-19 — Thor Engineering Team*
+*آخر تحديث: v0.4.0 — 2026-06-19*
