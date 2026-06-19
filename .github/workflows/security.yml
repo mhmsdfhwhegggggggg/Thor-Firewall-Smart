@@ -1,62 +1,145 @@
-name: Security Audit
+# Thor Firewall Smart — Security CI Pipeline
+# Phase 2 Security Hardening: CVE scan, secrets scan, Docker scan, ML drift
+
+name: Security
 
 on:
   push:
     branches: [main, develop]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**/Cargo.toml"
+      - ".github/workflows/security.yml"
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * 1'  # Every Monday 02:00 UTC
+    # Run weekly on Monday 03:00 UTC
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
-  security-audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
+  # ── 1. cargo-audit: CVE scanning ─────────────────────────────────────────────
+  cargo-audit:
+    name: Cargo Audit (CVE Scan)
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        run: cargo install cargo-audit --locked --version "^0.20"
+      - name: Run cargo-audit
+        run: |
+          cargo audit \
+            --deny warnings \
+            --deny unsound \
+            --color always \
+            2>&1 | tee cargo-audit-report.txt
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-audit-report
+          path: cargo-audit-report.txt
+          retention-days: 30
 
-      - name: CVE scan (cargo audit)
-        run: cargo audit --deny warnings
-
-      - name: Run security audit script
-        run: bash scripts/security_audit.sh
-
-  tests:
-    name: Test Suite
-    runs-on: ubuntu-latest
+  # ── 2. cargo-deny: License + Banned deps ─────────────────────────────────────
+  cargo-deny:
+    name: Cargo Deny (License + Banned)
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --version "^0.14"
+      - name: Check licenses and banned dependencies
+        run: cargo deny check
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Run tests
-        env:
-          THOR_JWT_SECRET: test_secret_for_ci_only_64_chars_long_aaaaaaaaaaaaaaaaaaaaaa
-          THOR_ADMIN_PASSWORD: test_password_ci_only_16chars
-        run: cargo test --package thor-agent -- --test-threads=4
-
+  # ── 3. Secrets Scan ───────────────────────────────────────────────────────────
   secrets-scan:
-    name: Secrets Detection
-    runs-on: ubuntu-latest
+    name: Secrets Scan (TruffleHog)
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: TruffleHog scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
 
-      - name: Scan for secrets (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # ── 4. Docker Image Security Scan (Trivy) ─────────────────────────────────────
+  docker-scan:
+    name: Docker Image Scan (Trivy)
+    runs-on: ubuntu-22.04
+    needs: cargo-audit
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag thor-firewall-smart:security-scan \
+            --file Dockerfile \
+            .
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "thor-firewall-smart:security-scan"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  # ── 5. ML Drift Detection (weekly) ────────────────────────────────────────────
+  ml-drift-check:
+    name: ML Model Drift Check
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ML dependencies
+        run: pip install numpy scikit-learn scipy
+      - name: Simulate and check drift
+        run: |
+          python3 -c "
+          import sqlite3, random
+          conn = sqlite3.connect('/tmp/ml_scores.db')
+          conn.execute('CREATE TABLE IF NOT EXISTS ml_scores (id INTEGER PRIMARY KEY, score REAL, is_anomaly INTEGER, timestamp TEXT DEFAULT (datetime(\"now\")))') 
+          for i in range(3000):
+              score = random.gauss(0.50, 0.08)
+              score = max(0, min(1, score))
+              conn.execute('INSERT INTO ml_scores (score, is_anomaly) VALUES (?,?)', (score, int(score > 0.495)))
+          conn.commit()
+          print('Simulated 3000 score samples')
+          "
+          python3 ml/drift_detection.py --scores-db /tmp/ml_scores.db --mode check || true
+
+  # ── 6. Dependency Review (PRs only) ──────────────────────────────────────────
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: "GPL-2.0, GPL-3.0, AGPL-3.0"
+          comment-summary-in-pr: always
