@@ -1,15 +1,32 @@
 [workspace]
 resolver = "2"
 members = [
+    # ── Core shared library (types, crypto, events) ───────────────
     "crates/thor-common",
+
+    # ── eBPF kernel programs (compiled separately for bpfel-unknown-none) ─
     "crates/thor-bpf",
+    "crates/thor-xdp-ebpf",
+
+    # ── Monolithic agent (legacy + detection engines) ─────────────
     "crates/thor-agent",
-    "crates/thor-script",
-    "crates/thor-ids",
+
+    # ── Specialised micro-agents (new modular architecture) ────────
+    "crates/thor-agent-net",   # L3/L4 XDP Network Agent
+    "crates/thor-agent-web",   # L7 WAF Web Agent
+    "crates/thor-agent-srv",   # EDR Server Agent
+
+    # ── Control & Intelligence ─────────────────────────────────────
+    "crates/thor-soc-slm",     # SOC Small Language Model engine
+    "crates/thor-xdp",         # XDP userspace loader helper
+
+    # ── Supporting libraries ───────────────────────────────────────
+    "crates/thor-script",      # Scripting engine (playbooks)
+    "crates/thor-ids",         # IDS/DPI engine
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Thor Security Team"]
@@ -80,6 +97,13 @@ hostname = "0.4"
 uuid     = { version = "1.8", features = ["v4"] }
 regex    = "1.10"
 mimalloc = { version = "0.1", default-features = false }
+
+# ── mTLS / Zero-Trust (Phase 0 — CISO Requirement) ─────────────────────────
+rcgen        = { version = "0.13", features = ["pem"] }
+rustls       = { version = "0.23", features = ["ring"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2.1"
+webpki-roots = "0.26"
 
 # ── Continuous learning
 rusqlite = { version = "0.31", features = ["bundled"] }
