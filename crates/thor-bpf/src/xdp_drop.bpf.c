@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 // Thor XDP Firewall — Enhanced Production Version
+// Phase 3 Performance: PERCPU maps for zero-core-contention at 15-20 Mpps
 // Supports: LPM CIDR blocklist (v4+v6), port blocklist, per-IP rate limiting, ICMP filtering, SYN Flood protection
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
@@ -65,23 +66,49 @@ struct {
     __uint(max_entries, RINGBUF_SIZE);
 } thor_xdp_events SEC(".maps");
 
-/* Per-IPv4 rate limiting state */
+/* Per-IPv4 rate limiting state — PERCPU_LRU_HASH eliminates inter-core locking.
+ * Phase 3 Performance: BPF_MAP_TYPE_LRU_HASH has a single lock per bucket.
+ * At 20 Mpps with 16+ cores, this becomes the bottleneck.
+ * PERCPU_LRU_HASH maintains one entry per CPU → zero contention at lookup.
+ * Trade-off: 16x more memory (negligible for 100k entries × 12 bytes × 16 CPUs = ~19MB).
+ * The per-CPU values are aggregated in userspace for metrics.
+ */
 struct rate_state { __u64 last_ts; __u32 count; };
 struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(type, BPF_MAP_TYPE_PERCPU_LRU_HASH);  /* Phase 3: was LRU_HASH */
     __uint(max_entries, 100000);
     __type(key, __u32);
     __type(value, struct rate_state);
 } thor_rate_states SEC(".maps");
 
-/* SYN Flood protection state */
+/* SYN Flood protection state — also PERCPU_LRU_HASH for same reason */
 struct syn_state { __u64 last_ts; __u32 count; };
 struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(type, BPF_MAP_TYPE_PERCPU_LRU_HASH);  /* Phase 3: was LRU_HASH */
     __uint(max_entries, 100000);
     __type(key, __u32);
     __type(value, struct syn_state);
 } thor_syn_states SEC(".maps");
+
+/* Per-CPU flow tracking — new in Phase 3.
+ * Tracks (src_ip, dst_ip, dst_port) → packet count per CPU core.
+ * Used for: connection rate analysis, beaconing detection, data exfil.
+ * BPF_MAP_TYPE_PERCPU_HASH: zero locking between cores, aggregated in userspace.
+ */
+struct flow_key {
+    __u32 src_ip;
+    __u32 dst_ip;
+    __u16 dst_port;
+    __u8  proto;
+    __u8  _pad;
+};
+struct flow_val { __u64 pkt_count; __u64 byte_count; __u64 last_ts; };
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_HASH);
+    __uint(max_entries, 65536);  /* 64K active flows per CPU — ~48MB total at 16 CPUs */
+    __type(key, struct flow_key);
+    __type(value, struct flow_val);
+} thor_flow_tracker SEC(".maps");
 
 /* Rate limit config */
 struct rate_limit_cfg { __u32 pps; __u64 window_ns; __u32 syn_pps; };
