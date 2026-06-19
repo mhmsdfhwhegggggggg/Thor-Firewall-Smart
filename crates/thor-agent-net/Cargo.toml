@@ -1,15 +1,29 @@
 [package]
-name = "thor-agent-net"
-version = "0.1.0"
-edition = "2021"
+name        = "thor-agent-net"
+description = "Thor L3/L4 XDP/eBPF Network Agent — fast-path packet filtering"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
 thor-common = { path = "../thor-common" }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-tracing = { workspace = true }
+tokio       = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+tracing     = { workspace = true }
 tracing-subscriber = { workspace = true }
-anyhow = { workspace = true }
-aya = "0.12"
+anyhow      = { workspace = true }
+chrono      = { workspace = true }
+uuid        = { workspace = true }
 
+# eBPF runtime (userspace loader)
+aya         = { workspace = true }
+aya-log     = "0.2"
+
+# mTLS for SOC communication
+tokio-rustls   = { workspace = true }
+rustls         = { workspace = true }
+rustls-pemfile = { workspace = true }
+
+# HTTP client for SOC event forwarding
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
