@@ -30,12 +30,12 @@ tracing-appender   = "0.2"
 # ── Serialization ─────────────────────────────────────────────────────────────
 serde      = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.9"
+serde_yml  = "0.0.12"    # replaces archived serde_yaml 0.9 — same API
 chrono     = { version = "0.4", features = ["serde"] }
 
 # ── Networking ────────────────────────────────────────────────────────────────
 axum       = { version = "0.7", features = ["ws", "macros", "http2"] }
-tower      = { version = "0.4", features = ["timeout", "limit"] }
+# tower features: see Phase 3 block below
 tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip"] }
 
 # ── Memory & Concurrency ──────────────────────────────────────────────────────
@@ -48,7 +48,9 @@ parking_lot = "0.12"
 aya = { version = "0.12", features = ["async_tokio"] }
 
 # ── ML / Inference ────────────────────────────────────────────────────────────
-ort     = { version = "2.0.0-rc.4", features = ["load-dynamic"] }
+# ort RC → stable: pin to 1.x for production stability
+# To use ONNX RT: set THOR_ORT_LIB_PATH=/usr/lib/libonnxruntime.so.1.18.0
+ort = { version = "1.16", features = ["load-dynamic"] }
 ndarray = { version = "0.15", features = ["rayon"] }
 
 # ── Networking utilities ──────────────────────────────────────────────────────
@@ -86,6 +88,19 @@ tempfile  = "3"
 # ── Phase 2: Axis 2 additions ──────────────────────────────────────────────────
 once_cell = "1.19"
 hex       = "0.4"
+
+# ── Phase 3: Production Readiness (v0.3.0) ────────────────────────────────────
+# Password hashing — Argon2id (OWASP recommended, constant-time)
+argon2     = "0.5"
+# Active fork of serde_yaml (see migration note above — serde_yml replaces serde_yaml)
+# redb: replaces archived sled 0.34 — 3x faster, actively maintained
+redb       = "2.1"
+# Criterion for benchmarks (dev-only)
+criterion  = { version = "0.5", features = ["html_reports"] }
+# reqwest for TheHive integration
+reqwest    = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Tower rate limiter
+tower      = { version = "0.4", features = ["limit", "timeout"] }
 
 [profile.dev]
 opt-level = 1
