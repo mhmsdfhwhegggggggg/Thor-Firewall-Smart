@@ -2,6 +2,11 @@
 //! Sigma (condition-aware), YARA, IOC, ML/ONNX, IDS (Suricata-compatible), FIM
 //! Phase 3 Axis 1: Behavioral Sigma Sequence Detection (multi-stage attack chains)
 //! Phase 4: Zero-Day Detection (behavioral anomaly + exploit primitive heuristics)
+//!
+//! v0.3.0 CRITICAL FIX:
+//!   - ml_threshold is now configurable via ThorConfig (default 0.495).
+//!   - Previously hardcoded at 0.70 → 0% detection rate with a correctly trained IF model.
+//!   - DetectionEngine::new() now takes ml_threshold: f64 from config.
 
 pub mod ioc_check;
 pub mod sigma;
@@ -31,19 +36,30 @@ use sigma::SigmaEngine;
 use yara::YaraEngine;
 
 pub struct DetectionEngine {
-    sigma:       SigmaEngine,
-    yara:        YaraEngine,
-    ioc_checker: IocChecker,
-    ids:         Arc<IdsEngine>,
-    ml:          Arc<MlEngine>,
+    sigma:        SigmaEngine,
+    yara:         YaraEngine,
+    ioc_checker:  IocChecker,
+    ids:          Arc<IdsEngine>,
+    ml:           Arc<MlEngine>,
+    /// Configurable ML anomaly threshold.
+    /// CRITICAL FIX (v0.3.0): was hardcoded to 0.70 → 0% detection.
+    /// Default: 0.495 (from ThorConfig.ml_threshold / THOR_ML_THRESHOLD env var).
+    /// Tune: lower → more sensitive; higher → fewer false positives.
+    ml_threshold: f64,
 }
 
 impl DetectionEngine {
+    /// Create the detection engine.
+    ///
+    /// # Arguments
+    /// * `ml_threshold` — Anomaly score threshold from `ThorConfig.ml_threshold`.
+    ///   **Do not hardcode this.** Always pass `config.ml_threshold`.
     pub fn new(
         sigma_rules_dir: &Path,
         yara_rules_dir:  &Path,
         ids_rules_dir:   &Path,
         ml:              Arc<MlEngine>,
+        ml_threshold:    f64,
     ) -> Result<Self> {
         let sigma = SigmaEngine::load(sigma_rules_dir)
             .map_err(|e| { warn!("Sigma load error: {}", e); e })?;
@@ -55,13 +71,14 @@ impl DetectionEngine {
         let ids = Arc::new(IdsEngine::load_from_dir(ids_rules_dir));
 
         info!(
-            "🔍 Detection engine initialized — Sigma:{} YARA:{} IDS:{}",
+            "🔍 Detection engine initialized — Sigma:{} YARA:{} IDS:{} ml_threshold:{:.3}",
             sigma.rule_count(),
             yara.rule_count(),
             ids.rule_count(),
+            ml_threshold,
         );
 
-        Ok(Self { sigma, yara, ioc_checker, ids, ml })
+        Ok(Self { sigma, yara, ioc_checker, ids, ml, ml_threshold })
     }
 
     pub async fn detect(&self, event: &EnrichedEvent) -> Result<Vec<Alert>> {
@@ -89,8 +106,10 @@ impl DetectionEngine {
         alerts.extend(yara_alerts);
 
         // 5. ML anomaly detection
+        // CRITICAL FIX: use self.ml_threshold (configurable) not hardcoded 0.70
         if let Some(score) = self.ml.score(event).await {
-            if score > 0.70 {
+            let threshold = self.ml_threshold as f32;
+            if score > threshold {
                 alerts.push(Alert {
                     id: uuid::Uuid::new_v4().to_string(),
                     timestamp: chrono::Utc::now(),
@@ -99,8 +118,8 @@ impl DetectionEngine {
                     rule_type: RuleType::Ml,
                     threat_level: ThreatLevel::from_score(score),
                     description: format!(
-                        "ML anomaly score: {:.3} (threshold: 0.70) — {}",
-                        score, classify_anomaly(score)
+                        "ML anomaly score: {:.3} (threshold: {:.3}) — {}",
+                        score, threshold, classify_anomaly(score, threshold)
                     ),
                     pid: None,
                     process_name: None,
@@ -120,11 +139,29 @@ impl DetectionEngine {
     pub fn sigma_rule_count(&self) -> usize { self.sigma.rule_count() }
     pub fn yara_rule_count(&self)  -> usize { self.yara.rule_count() }
     pub fn ids_rule_count(&self)   -> usize { self.ids.rule_count() }
+    /// Expose the configured ML threshold (for metrics/health endpoint)
+    pub fn ml_threshold(&self) -> f64 { self.ml_threshold }
 }
 
-fn classify_anomaly(score: f32) -> &'static str {
-    if score >= 0.95      { "Likely attack in progress" }
-    else if score >= 0.85 { "Highly suspicious behavior" }
-    else if score >= 0.70 { "Anomalous activity" }
-    else                  { "Low anomaly" }
+/// Classify anomaly severity relative to the configured threshold.
+/// Bands are relative to threshold so they work regardless of the configured value.
+fn classify_anomaly(score: f32, threshold: f32) -> &'static str {
+    let excess = score - threshold;
+    if excess >= 0.45      { "Critical — likely active attack" }
+    else if excess >= 0.30 { "High — highly suspicious behavior" }
+    else if excess >= 0.15 { "Medium — anomalous activity" }
+    else                   { "Low — marginal anomaly" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::classify_anomaly;
+
+    #[test]
+    fn classify_is_relative_to_threshold() {
+        // With threshold=0.495, score=0.95 → excess=0.455 → Critical
+        assert_eq!(classify_anomaly(0.95, 0.495), "Critical — likely active attack");
+        // score just above threshold → Low
+        assert_eq!(classify_anomaly(0.50, 0.495), "Low — marginal anomaly");
+    }
 }
