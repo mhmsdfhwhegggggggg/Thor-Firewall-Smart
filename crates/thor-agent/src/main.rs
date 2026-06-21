@@ -52,6 +52,7 @@ mod dissectors;
 mod fingerprint;
 // Axis 3: DFIR
 mod forensics;
+mod control_plane_client;
 
 use config::ThorConfig;
 use ebpf::BpfManager;
@@ -202,6 +203,7 @@ async fn main() -> Result<()> {
             &config.yara_rules_dir,
             &config.ids_rules_dir,
             ml_engine.clone(),
+            config.ml_threshold,
         ).context("Failed to initialize detection engine")?,
     );
     info!("🔍 Detection: Sigma={} YARA={} IDS={}",
@@ -251,6 +253,25 @@ async fn main() -> Result<()> {
     // ── Event pipeline ─────────────────────────────────────────────────────────
     let pipeline = EventPipeline::new(state.clone(), detection.clone(), soar.clone());
     let pipeline_handle = pipeline.spawn(raw_rx, alert_tx.clone());
+
+    // ── Control Plane Client (Signed Protocol) ──────────────────────────────────
+    let policy_tx_sigma = pipeline.sigma_update_tx(); 
+    let cp_url = config.control_plane_url.clone();
+    let cp_pubkey = config.control_plane_pubkey.clone().expect("CRITICAL: THOR_CONTROL_PUBKEY (hex) is required for Action Protocol verification.");
+    
+    let cp_client = Arc::new(control_plane_client::ControlPlaneClient::new(
+        config.agent_id.clone(),
+        "dummy_agent_token".to_string(),
+        cp_url,
+        &cp_pubkey,
+    ).context("Failed to init ControlPlaneClient")?);
+
+    let cp_run = cp_client.clone();
+    tokio::spawn(async move {
+        if let Err(e) = cp_run.run(policy_tx_sigma).await {
+            error!("ControlPlaneClient fatal error: {}", e);
+        }
+    });
 
     // ── API server ─────────────────────────────────────────────────────────────
     let api_state = api::ApiState {

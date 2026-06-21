@@ -261,58 +261,50 @@ impl SoarEngine {
     }
 
     /// Execute SOAR playbook for an alert — returns list of actions taken.
+    /// 🛡️ ERA: Staged Enforcement implementation
     pub async fn respond(&self, alert: &Alert) -> Vec<String> {
         self.correlator.ingest(alert.clone());
         let mut actions = Vec::new();
 
-        match alert.threat_level {
-            ThreatLevel::Critical => {
-                // 1. Forensics capture
-                if let Some(pid) = alert.pid {
-                    match self.forensics.capture(pid).await {
-                        Ok(path) => actions.push(format!("forensics_captured:{}", path)),
-                        Err(e)   => warn!("Forensics failed: {}", e),
-                    }
-                    // 2. Network isolation (netns)
-                    match self.isolator.isolate_process(pid).await {
-                        Ok(_)  => actions.push(format!("network_isolated:pid={}", pid)),
-                        Err(e) => warn!("Isolation failed: {}", e),
-                    }
+        let confidence = alert.confidence_score;
+        let ip = alert.src_ip.as_deref().unwrap_or("0.0.0.0");
+
+        info!("🛡️ ERA Staged Enforcement: Processing '{}' (Confidence: {:.2})", alert.rule_name, confidence);
+
+        if confidence >= 0.90 {
+            // 🚫 [Level 3] INTERDICTION: Block source IP at line-rate (eBPF XDP)
+            if let Some(ip) = &alert.src_ip {
+                if let Err(msg) = self.auto_block_ip(ip, "era-interdiction") {
+                    actions.push(format!("block_skipped:{}", msg));
+                } else {
+                    actions.push(format!("ip_blocked:{}", ip));
                 }
-
-                // 3. Block source IP if available (with circuit breaker)
-                if let Some(ip) = &alert.src_ip {
-                    if let Err(msg) = self.auto_block_ip(ip, "critical-alert") {
-                        warn!("SOAR block skipped: {}", msg);
-                        actions.push(format!("block_skipped:{}", msg));
-                    } else {
-                        actions.push(format!("ip_blocked:{}", ip));
-                    }
-                }
-
-                actions.push("soar_playbook:critical".to_string());
             }
-
-            ThreatLevel::High => {
-                // Block source IP (with circuit breaker)
-                if let Some(ip) = &alert.src_ip {
-                    if let Err(msg) = self.auto_block_ip(ip, "high-alert") {
-                        warn!("SOAR block skipped: {}", msg);
-                        actions.push(format!("block_skipped:{}", msg));
-                    } else {
-                        actions.push(format!("ip_blocked:{}", ip));
-                    }
-                }
-                actions.push("soar_playbook:high".to_string());
+            actions.push("era_action:interdiction".to_string());
+        } else if confidence >= 0.70 {
+            // 📉 [Level 2] SHAPING: Rate-limit traffic to 1Mbps (Traffic Shaping)
+            if let Some(ip) = &alert.src_ip {
+                self.state.shaped_ips.insert(ip.clone(), 1_000_000); // 1Mbps
+                actions.push(format!("traffic_shaped:{}@1Mbps", ip));
             }
-
-            ThreatLevel::Medium => {
-                // Log and watch — no auto-block for medium
-                actions.push("soar_playbook:medium_alert".to_string());
+            actions.push("era_action:shaping".to_string());
+        } else if confidence >= 0.50 {
+            // 🔍 [Level 1] INSPECTION: Redirect to Sidecar (Envoy) for deep analysis
+            if let Some(ip) = &alert.src_ip {
+                self.state.inspecting_ips.insert(ip.clone(), true);
+                actions.push(format!("deep_inspection:{}", ip));
             }
+            actions.push("era_action:inspection".to_string());
+        } else {
+            // 📝 [Level 0] TELEMETRY: Log only for behavioral baseline
+            actions.push("era_action:telemetry_only".to_string());
+        }
 
-            ThreatLevel::Low | ThreatLevel::Unknown => {
-                actions.push("soar_playbook:log_only".to_string());
+        // Forensics capture for High/Critical regardless of score if PID exists
+        if alert.threat_level == ThreatLevel::Critical || alert.threat_level == ThreatLevel::High {
+            if let Some(pid) = alert.pid {
+                let _ = self.forensics.capture(pid).await;
+                actions.push("forensics_captured".to_string());
             }
         }
 

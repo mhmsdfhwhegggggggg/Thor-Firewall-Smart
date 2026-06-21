@@ -34,6 +34,7 @@ message RegisterAgentRequest {
     string thor_version = 4;
     string ip_address = 5;
     map<string, string> metadata = 6;
+    string attestation_hash = 7; // Simulated TPM/Hardware hash
 }
 
 message RegisterAgentResponse {
@@ -54,6 +55,7 @@ message PolicyUpdate {
     string content = 4;          // محتوى YAML/JSON
     string action = 5;           // "CREATE", "UPDATE", "DELETE"
     string enforcement_mode = 6; // "ENFORCE" أو "SHADOW" (لأمان الذكاء الاصطناعي)
+    bytes signature = 7;         // Ed25519 signature of the above fields
 }
 
 message IncidentReport {

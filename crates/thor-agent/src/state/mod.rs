@@ -45,8 +45,14 @@ pub struct ThorState {
     // IOC database — Bloom + DashMap
     pub ioc_db: Arc<IocDatabase>,
 
-    // Sigma engine — behind RwLock so handlers can inject rules
-    pub sigma_engine: RwLock<SigmaEngine>,
+    // Blocked IPs (synchronized to XDP map)
+    pub blocked_ips: DashMap<String, chrono::DateTime<chrono::Utc>>,
+
+    // 🛡️ ERA: Staged Enforcement Maps
+    /// IPs subject to rate-limiting (e.g., 1Mbps)
+    pub shaped_ips: DashMap<String, u64>, 
+    /// IPs subject to deep inspection (Envoy sidecar processing)
+    pub inspecting_ips: DashMap<String, bool>,
 }
 
 impl ThorState {
@@ -56,12 +62,6 @@ impl ThorState {
             config.ioc_bloom_fpr,
         ));
 
-        let sigma_engine = SigmaEngine::load(&config.sigma_rules_dir)
-            .unwrap_or_else(|e| {
-                tracing::warn!("Sigma engine fallback (empty): {}", e);
-                SigmaEngine::empty()
-            });
-
         Self {
             packets_processed: AtomicU64::new(0),
             packets_dropped: AtomicU64::new(0),
@@ -69,7 +69,7 @@ impl ThorState {
             ws_clients: AtomicUsize::new(0),
             flows: DashMap::with_shard_amount(config.flow_map_shards),
             ioc_db,
-            sigma_engine: RwLock::new(sigma_engine),
+            blocked_ips: DashMap::new(),
         }
     }
 

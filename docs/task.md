@@ -1,0 +1,48 @@
+# Hardening & Refactoring Tasks
+
+- [x] Phase 1: Planning and Research <!-- id: 0 -->
+    - [x] Research Control Plane & Agent communication <!-- id: 1 -->
+    - [x] Analyze ML feature extraction for XAI <!-- id: 2 -->
+    - [x] Review eBPF map usage <!-- id: 3 -->
+- [ ] Phase 2: Stability & Testing <!-- id: 4 -->
+    - [ ] Setup Docker-based integration test environment <!-- id: 5 -->
+    - [ ] Create attack simulation scripts <!-- id: 6 -->
+- [x] Phase 3: Control Plane Hardening <!-- id: 7 -->
+    - [x] Implement mTLS enforcement <!-- id: 8 -->
+    - [x] Add State Store (PostgreSQL/Redis) <!-- id: 9 -->
+    - [x] Implement Delegation Policy Manager <!-- id: 10 -->
+- [x] Phase 4: Action Protocol (Signed Commands) <!-- id: 11 -->
+    - [x] Add Ed25519 signing logic to Control Plane <!-- id: 12 -->
+    - [x] Add signature verification to thor-agent <!-- id: 13 -->
+- [x] Phase 5: Explainable AI (XAI) <!-- id: 14 -->
+    - [x] Implement feature weight extraction in MlEngine <!-- id: 15 -->
+    - [x] Update SOC alerts with XAI data <!-- id: 16 -->
+- [/] Phase 6: eBPF Hardening <!-- id: 17 -->
+    - [x] Refactor Global Maps to Per-CPU Maps <!-- id: 18 -->
+    - [ ] Move complex logic to User-space where appropriate <!-- id: 19 -->
+- [x] Phase 7: Strategic Production Roadmap <!-- id: 20 -->
+    - [x] Create comprehensive maturity and operations plan <!-- id: 21 -->
+- [x] Phase 8: High Availability (HA) Clustering <!-- id: 22 -->
+    - [x] Implement `Redb` persistent state store for Control Plane <!-- id: 23 -->
+    - [x] Add state synchronization logic for multi-node clustering <!-- id: 24 -->
+- [/] Phase 9: Deep Observability <!-- id: 25 -->
+    - [/] Integrate Prometheus metrics into Control Plane & Agent <!-- id: 26 -->
+    - [ ] Add OpenTelemetry tracing for Action Protocol flows <!-- id: 27 -->
+- [x] Phase 10: Security Hardening (System Level) <!-- id: 28 -->
+    - [x] Implement simulated KMS/HSM for signing keys <!-- id: 29 -->
+    - [x] Add Secure Boot / IMA integrity check simulation <!-- id: 30 -->
+- [x] Phase 11: Fail-Soft & Autonomous Operation <!-- id: 31 -->
+    - [x] Implement Cache-First policy execution for Agent <!-- id: 32 -->
+    - [x] Add circuit breaker for Control Plane connectivity <!-- id: 33 -->
+- [x] Phase 12: Advanced QA & Fuzzing <!-- id: 34 -->
+    - [x] Setup AFL++ fuzzing targets for packet dissectors <!-- id: 35 -->
+    - [x] Create automated "Chaos Security" injection suite <!-- id: 36 -->
+- [x] Phase 13: ERA Implementation (Advanced Hardening) <!-- id: 37 -->
+    - [x] Implement Staged Enforcement in SoarEngine <!-- id: 38 -->
+    - [x] Implement eBPF Edge Aggregation (HLL) <!-- id: 39 -->
+    - [x] Implement Zero-Trust Device Attestation <!-- id: 40 -->
+- [x] Phase 14: Real-World Testing & Chaos Validation <!-- id: 41 -->
+    - [x] Create E2E Scenario Validator (Rust) <!-- id: 42 -->
+    - [x] Create Adversarial Traffic Generator (Python/Scapy) <!-- id: 43 -->
+    - [x] Implement Automated Chaos Orchestrator <!-- id: 44 -->
+    - [ ] Perform Performance Benchmarking (Simulated 20Mpps) <!-- id: 45 -->

@@ -35,20 +35,24 @@ use ioc_check::IocChecker;
 use sigma::SigmaEngine;
 use yara::YaraEngine;
 
+use parking_lot::RwLock;
+
 pub struct DetectionEngine {
-    sigma:        SigmaEngine,
+    sigma:        Arc<RwLock<SigmaEngine>>,
     yara:         YaraEngine,
     ioc_checker:  IocChecker,
     ids:          Arc<IdsEngine>,
     ml:           Arc<MlEngine>,
-    /// Configurable ML anomaly threshold.
-    /// CRITICAL FIX (v0.3.0): was hardcoded to 0.70 → 0% detection.
-    /// Default: 0.495 (from ThorConfig.ml_threshold / THOR_ML_THRESHOLD env var).
-    /// Tune: lower → more sensitive; higher → fewer false positives.
     ml_threshold: f64,
 }
 
 impl DetectionEngine {
+    pub fn inject_sigma_rule(&self, rule: crate::detection::sigma::GuardedDynamicRule) -> Result<()> {
+        let mut sigma = self.sigma.write();
+        sigma.add_rule(&rule.yaml_content)?;
+        info!("💉 Rule {} injected into Sigma engine", rule.id);
+        Ok(())
+    }
     /// Create the detection engine.
     ///
     /// # Arguments
@@ -61,8 +65,8 @@ impl DetectionEngine {
         ml:              Arc<MlEngine>,
         ml_threshold:    f64,
     ) -> Result<Self> {
-        let sigma = SigmaEngine::load(sigma_rules_dir)
-            .map_err(|e| { warn!("Sigma load error: {}", e); e })?;
+        let sigma = Arc::new(RwLock::new(SigmaEngine::load(sigma_rules_dir)
+            .map_err(|e| { warn!("Sigma load error: {}", e); e })?));
 
         let yara = YaraEngine::load(yara_rules_dir)
             .map_err(|e| { warn!("YARA load error: {}", e); e })?;
@@ -72,7 +76,7 @@ impl DetectionEngine {
 
         info!(
             "🔍 Detection engine initialized — Sigma:{} YARA:{} IDS:{} ml_threshold:{:.3}",
-            sigma.rule_count(),
+            sigma.read().rule_count(),
             yara.rule_count(),
             ids.rule_count(),
             ml_threshold,
@@ -84,53 +88,74 @@ impl DetectionEngine {
     pub async fn detect(&self, event: &EnrichedEvent) -> Result<Vec<Alert>> {
         let mut alerts = Vec::new();
 
-        // 1. Sigma rule matching (full condition parser)
-        if let Some(alert) = self.sigma.check(event) {
+        // 1. Sigma rule matching (deterministic)
+        if let Some(mut alert) = self.sigma.read().check(event) {
+            alert.confidence_score = 0.85; // Deterministic rule
             alerts.push(alert);
         }
 
-        // 2. IOC check (Bloom + DashMap)
-        if let Some(alert) = self.ioc_checker.check(event) {
+        // 2. IOC check (High fidelity)
+        if let Some(mut alert) = self.ioc_checker.check(event) {
+            alert.confidence_score = 1.0; // Absolute match
             alerts.push(alert);
         }
 
         // 3. IDS rules (Suricata-compatible)
-        alerts.extend(self.ids.scan(event));
+        for mut alert in self.ids.scan(event) {
+            alert.confidence_score = 0.85;
+            alerts.push(alert);
+        }
 
-        // 4. YARA scan (CPU-heavy — run in spawn_blocking)
-        let yara_alerts = tokio::task::spawn_blocking({
+        // 4. YARA scan
+        let mut yara_alerts = tokio::task::spawn_blocking({
             let yara = self.yara.clone();
             let ev   = event.clone();
             move || yara.scan(&ev)
         }).await.unwrap_or_default();
+        
+        for alert in &mut yara_alerts {
+            alert.confidence_score = 0.90; // YARA is usually high fidelity malware match
+        }
         alerts.extend(yara_alerts);
 
         // 5. ML anomaly detection
-        // CRITICAL FIX: use self.ml_threshold (configurable) not hardcoded 0.70
-        if let Some(score) = self.ml.score(event).await {
+        if let Some(xai) = self.ml.score(event).await {
             let threshold = self.ml_threshold as f32;
-            if score > threshold {
+            if xai.score > threshold {
                 alerts.push(Alert {
                     id: uuid::Uuid::new_v4().to_string(),
                     timestamp: chrono::Utc::now(),
                     source: event.hostname.clone().unwrap_or_default(),
                     rule_name: "ML:AnomalyScore".to_string(),
                     rule_type: RuleType::Ml,
-                    threat_level: ThreatLevel::from_score(score),
+                    threat_level: ThreatLevel::from_score(xai.score),
                     description: format!(
                         "ML anomaly score: {:.3} (threshold: {:.3}) — {}",
-                        score, threshold, classify_anomaly(score, threshold)
+                        xai.score, threshold, classify_anomaly(xai.score, threshold)
                     ),
                     pid: None,
                     process_name: None,
                     src_ip: event.src_ip_str.clone(),
                     dst_ip: event.dst_ip_str.clone(),
                     dst_port: None,
-                    ml_score: Some(score),
+                    ml_score: Some(xai.score),
+                    confidence_score: xai.score, // Confidence = ML Score
+                    xai_report: Some(xai),
                     soar_actions_taken: vec![],
                     raw_event_type: event.raw.source().to_string(),
                 });
             }
+        }
+
+        // 🛡️ ERA: Consensus Hardening
+        // If multiple engines triggered, boost confidence
+        if alerts.len() > 1 {
+            let max_conf = alerts.iter().map(|a| a.confidence_score).fold(0.0, f32::max);
+            let boosted = (max_conf + 0.15).min(1.0);
+            for alert in &mut alerts {
+                alert.confidence_score = boosted;
+            }
+            info!("🛡️ ERA Consensus: Boosted confidence to {:.2} (Source hits: {})", boosted, alerts.len());
         }
 
         Ok(alerts)

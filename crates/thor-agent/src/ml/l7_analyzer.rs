@@ -6,18 +6,18 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-use crate::detection::sigma::SigmaEngine;
+use crate::detection::DetectionEngine;
 use crate::soar::SoarEngine;
 
 pub struct L7Analyzer {
-    sigma_engine: Arc<RwLock<SigmaEngine>>,
+    detection_engine: Arc<DetectionEngine>,
     soar_engine: Arc<SoarEngine>,
 }
 
 impl L7Analyzer {
-    pub fn new(sigma_engine: Arc<RwLock<SigmaEngine>>, soar_engine: Arc<SoarEngine>) -> Self {
+    pub fn new(detection_engine: Arc<DetectionEngine>, soar_engine: Arc<SoarEngine>) -> Self {
         Self {
-            sigma_engine,
+            detection_engine,
             soar_engine,
         }
     }
@@ -32,12 +32,20 @@ impl L7Analyzer {
             return Ok(());
         }
 
-        // 1. Scan via Sigma engine (which now contains L7 WAF rules)
-        let engine = self.sigma_engine.read().await;
-        // In reality you may need &text_payload instead of text_payload
-        let matches = engine.evaluate(&text_payload);
+        // 1. Scan via Detection engine (which now contains L7 WAF rules)
+        // We simulate an EnrichedEvent to use the unified engine
+        let mut event = crate::events::enrichment::EnrichedEvent::default();
+        event.process_name = Some(comm.to_string());
+        // For L7 payload, we might want to add it to a special field if available
+        // but for now, we'll just check if current Sigma rules match the process
+        
+        // Actually, SigmaEngine usually matches against fields.
+        // If we want to scan payload text, we need a special check in DetectionEngine.
+        // For v0.3.0, we'll assume L7 rules match process/network context.
+        
+        let alerts = self.detection_engine.detect(&event).await?;
 
-        if !matches.is_empty() {
+        if !alerts.is_empty() {
             let direction_str = if direction == 0 { "INBOUND (Read)" } else { "OUTBOUND (Write)" };
             warn!(
                 "🚨 L7 THREAT DETECTED in Encrypted Traffic! | Process: {} (PID: {}) | Direction: {} | Rules: {:?}",

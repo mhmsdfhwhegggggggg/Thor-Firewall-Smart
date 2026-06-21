@@ -3,6 +3,9 @@
 mod agent_manager;
 pub mod api;
 pub mod grpc;
+mod state_store;
+mod metrics;
+mod security;
 
 use anyhow::{Result, Context};
 use std::net::SocketAddr;
@@ -21,12 +24,27 @@ struct CreatePolicyReq {
     enforcement_mode: String,
 }
 
+#[derive(Clone)]
+pub struct AppState {
+    pub db: sqlx::PgPool,
+    pub agent_manager: Arc<AgentManager>,
+    pub policy_tx: broadcast::Sender<grpc::pb::PolicyUpdate>,
+    pub signing_key: Arc<ed25519_dalek::SigningKey>,
+    pub state_store: Arc<state_store::RedbStateStore>,
+    pub metrics: Arc<metrics::ControlMetrics>,
+}
+
 async fn create_policy(
-    claims: Option<api::middleware::Claims>,
+    claims: api::middleware::Claims, // REMOVED Option: Mandatory JWT
     State(state): State<AppState>,
     Json(payload): Json<CreatePolicyReq>
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, &'static str)> {
-    let created_by = claims.map(|c| c.sub).unwrap_or_else(|| "DEMO_USER".to_string());
+    // ENFORCEMENT: Only SocL2 or SecManager can create policies
+    if claims.role == api::middleware::Role::SocL1 {
+        return Err((axum::http::StatusCode::FORBIDDEN, "Insufficient permissions: L1 operators cannot modify global policies."));
+    }
+
+    let created_by = claims.sub;
 
     // Insert to DB
     let result = sqlx::query!(
@@ -45,15 +63,21 @@ async fn create_policy(
         serde_json::json!({"version": result.version})
     ).execute(&state.db).await;
 
-    // Broadcast to agents
-    let _ = state.policy_tx.send(grpc::pb::PolicyUpdate {
-        version: result.version as u64,
+    // Build and Sign the update for the Action Protocol
+    let mut update = grpc::pb::PolicyUpdate {
+        version: result.version as i64,
         policy_type: payload.policy_type,
         rule_id: payload.rule_id,
         content: payload.content,
         action: "CREATE".to_string(),
         enforcement_mode: payload.enforcement_mode,
-    });
+        signature: vec![], // To be filled
+    };
+
+    grpc::ActionProtocol::sign_policy(&state.signing_key, &mut update);
+
+    // Broadcast to agents
+    let _ = state.policy_tx.send(update);
 
     Ok(Json(json!({"status": "Success", "version": result.version})))
 }
@@ -64,12 +88,7 @@ use crate::agent_manager::AgentManager;
 
 use tokio::sync::broadcast;
 
-#[derive(Clone)]
-pub struct AppState {
-    pub db: sqlx::PgPool,
-    pub agent_manager: Arc<AgentManager>,
-    pub policy_tx: broadcast::Sender<grpc::pb::PolicyUpdate>,
-}
+// Consolidated AppState above
 
 async fn get_dashboard(
     claims: Option<api::middleware::Claims>,
@@ -144,14 +163,39 @@ async fn main() -> Result<()> {
         }
     };
     
-    let agent_manager = Arc::new(AgentManager::new(db.clone()));
-    let (policy_tx, _rx) = broadcast::channel(100);
-    
+    // ── Cryptographic Infrastructure (KMS/Action Protocol) ───────────────────
+    let signing_key = security::KmsService::get_action_signing_key().unwrap_or_else(|e| {
+        error!("🚨 CRITICAL Security Failure: KMS unavailable ({}). Generating emergency ephemeral key.", e);
+        ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng)
+    });
+    let public_key = signing_key.verifying_key();
+    info!("🔑 Action Protocol Public Key: {}", hex::encode(public_key.to_bytes()));
+
+    // ── Persistent State Store (Redb) ─────────────────────────────────────────
+    let state_db_path = std::env::var("THOR_STATE_DB").unwrap_or_else(|_| "thor_state.db".to_string());
+    let state_store = Arc::new(state_store::RedbStateStore::open(state_db_path).context("Failed to open state store")?);
+
+    let (policy_tx, _) = broadcast::channel(100);
+    let agent_manager = Arc::new(AgentManager::new()); 
+    let metrics = Arc::new(metrics::ControlMetrics::new());
+
     let state = AppState {
         db: db.clone(),
         agent_manager,
         policy_tx,
+        signing_key: Arc::new(signing_key),
+        state_store,
+        metrics: metrics.clone(),
     };
+
+    // ── Metrics Server ────────────────────────────────────────────────────────
+    let metrics_addr: SocketAddr = std::env::var("THOR_METRICS_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:9091".to_string())
+        .parse()?;
+    let metrics_state = state.clone();
+    tokio::spawn(async move {
+        metrics::serve(metrics_addr, metrics_state).await;
+    });
 
     let grpc_addr = SocketAddr::from(([0, 0, 0, 0], 50051));
     let grpc_state = state.clone();

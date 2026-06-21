@@ -44,9 +44,9 @@ struct {
     __uint(map_flags, BPF_F_NO_PREALLOC);
 } thor_blocklist_ips_v6 SEC(".maps");
 
-/* Port blocklist */
+/* Port blocklist (PERCPU for max throughput) */
 struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(type, BPF_MAP_TYPE_PERCPU_LRU_HASH);
     __uint(max_entries, MAX_BLOCKLIST_PORTS);
     __type(key, __u16);
     __type(value, __u8);
@@ -119,7 +119,37 @@ struct {
     __type(value, struct rate_limit_cfg);
 } thor_rate_config SEC(".maps");
 
+/* HyperLogLog for unique IP tracking (ERA: Edge Aggregation)
+ * Uses 256 registers (8-bit index) per CPU to track unique source IPs.
+ */
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __uint(max_entries, 256);
+    __type(key, __u32);
+    __type(value, __u8);
+} thor_hll_ips SEC(".maps");
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+static __always_inline void update_hll(__u32 val)
+{
+    // Simple mixing hash for XDP
+    __u32 h = val;
+    h ^= h >> 16;
+    h *= 0x85ebca6b;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35;
+    h ^= h >> 16;
+
+    __u32 idx = h & 0xFF; // 256 registers
+    __u32 w = h >> 8;
+    __u8 rho = __builtin_ctz(w | (1U << 23)) + 1; // Limit zeros to 24 bits
+
+    __u8 *curr = bpf_map_lookup_elem(&thor_hll_ips, &idx);
+    if (curr && *curr < rho) {
+        *curr = rho;
+    }
+}
 
 static __always_inline void emit_drop_event(
     __u32 src_ip4, __u32 dst_ip4,
@@ -227,6 +257,9 @@ int thor_xdp_drop(struct xdp_md *ctx)
             if (stats) __sync_fetch_and_add(&stats->malformed_packets, 1);
             return XDP_DROP;
         }
+
+        // 🛡️ ERA: Edge Aggregation (Unique IP Tracking)
+        update_hll(ip->saddr);
 
         struct lpm_key_v4 key4 = { .prefixlen = 32, .ip = ip->saddr };
         if (bpf_map_lookup_elem(&thor_blocklist_ips, &key4)) {

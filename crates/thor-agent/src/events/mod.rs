@@ -111,6 +111,8 @@ pub struct Alert {
     pub dst_ip: Option<String>,
     pub dst_port: Option<u16>,
     pub ml_score: Option<f32>,
+    pub confidence_score: f32,
+    pub xai_report: Option<crate::ml::XaiReport>,
     pub soar_actions_taken: Vec<String>,
     pub raw_event_type: String,
 }

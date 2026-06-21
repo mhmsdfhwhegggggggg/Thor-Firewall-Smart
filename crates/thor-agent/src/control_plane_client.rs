@@ -1,34 +1,84 @@
-//! Thor Agent gRPC Client
-//! Maintains persistent connection to Control Plane and listens for policy updates.
-
-use anyhow::Result;
+use anyhow::{Result, Context};
 use tokio::sync::mpsc;
-// use tokio_stream::StreamExt;
 use tracing::{info, warn, error};
 use crate::detection::sigma::{GuardedDynamicRule, RuleMode, RuleSource};
 use std::time::Instant;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
+use ed25519_dalek::{Verifier, VerifyingKey, Signature};
+use serde::{Serialize, Deserialize};
 
-// Assuming proto integration is setup, for now we will stub out the stream reading logic conditionally:
-/*
-use thor_proto::thor_control_service_client::ThorControlServiceClient;
-use thor_proto::{HeartbeatRequest, AgentMetrics, StreamPoliciesRequest};
-*/
+const POLICY_CACHE_PATH: &str = "thor_policy_cache.json";
+
+// Import the generated protobuf client
+pub mod pb {// I will use a local wrapper for caching instead of modifying the generated proto.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CachedPolicyUpdate {
+    pub version: i64,
+    pub policy_type: String,
+    pub rule_id: String,
+    pub content: String,
+    pub action: String,
+    pub enforcement_mode: String,
+    pub signature: Vec<u8>,
+}
+
+impl From<PolicyUpdate> for CachedPolicyUpdate {
+    fn from(p: PolicyUpdate) -> Self {
+        Self {
+            version: p.version,
+            policy_type: p.policy_type,
+            rule_id: p.rule_id,
+            content: p.content,
+            action: p.action,
+            enforcement_mode: p.enforcement_mode,
+            signature: p.signature,
+        }
+    }
+}
+
+impl Into<PolicyUpdate> for CachedPolicyUpdate {
+    fn into(self) -> PolicyUpdate {
+        PolicyUpdate {
+            version: self.version,
+            policy_type: self.policy_type,
+            rule_id: self.rule_id,
+            content: self.content,
+            action: self.action,
+            enforcement_mode: self.enforcement_mode,
+            signature: self.signature,
+        }
+    }
+}
+    tonic::include_proto!("thor.control.v1");
+}
+use pb::thor_control_service_client::ThorControlServiceClient;
+use pb::{StreamPoliciesRequest, PolicyUpdate};
 
 pub struct ControlPlaneClient {
     agent_id: String,
     token: String,
     server_url: String,
+    verifying_key: VerifyingKey,
 }
 
 impl ControlPlaneClient {
-    pub fn new(agent_id: String, token: String, server_url: String) -> Self {
-        Self { agent_id, token, server_url }
+    pub fn new(agent_id: String, token: String, server_url: String, public_key_hex: &str) -> Result<Self> {
+        let public_key_bytes = hex::decode(public_key_hex).context("Invalid public key hex")?;
+        let verifying_key = VerifyingKey::from_bytes(
+            public_key_bytes.as_slice().try_into().context("Invalid key length")?
+        ).context("Failed to parse verifying key")?;
+
+        Ok(Self { agent_id, token, server_url, verifying_key })
     }
 
-    /// تشغيل حلقة الاتصال الأبدية مع إعادة المحاولة عند الانقطاع
     pub async fn run(&self, policy_tx: mpsc::Sender<GuardedDynamicRule>) -> Result<()> {
         info!("🔗 Connecting to Control Plane at {}", self.server_url);
+
+        // 🛡️ Phase 11: Cache-First Autonomous Mode
+        if let Err(e) = self.load_and_inject_cached_policies(policy_tx.clone()).await {
+            warn!("⚠️ No valid policy cache found or corrupted: {}", e);
+        }
         
         loop {
             match self.connect_and_listen(policy_tx.clone()).await {
@@ -41,31 +91,35 @@ impl ControlPlaneClient {
         }
     }
 
-    async fn connect_and_listen(&self, _policy_tx: mpsc::Sender<GuardedDynamicRule>) -> Result<()> {
-        // 1. الاتصال بالخادم (مع mTLS في الإنتاج)
-        // let mut client = ThorControlServiceClient::connect(self.server_url.clone()).await?;
+    async fn connect_and_listen(&self, policy_tx: mpsc::Sender<GuardedDynamicRule>) -> Result<()> {
+        // 1. Connect (In production, this would use mTLS config)
+        let mut client = ThorControlServiceClient::connect(self.server_url.clone()).await?;
         
-        // 2. طلب تدفق السياسات
-        /*
+        // 2. Request Policy Stream
         let request = tonic::Request::new(StreamPoliciesRequest {
             agent_id: self.agent_id.clone(),
             agent_token: self.token.clone(),
-            last_known_policy_version: 0, // يتم تحميلها من الذاكرة المحلية
+            last_known_policy_version: 0,
         });
-        */
 
-        // let mut stream = client.stream_policies(request).await?.into_inner();
-        
+        let mut stream = client.stream_policies(request).await?.into_inner();
         info!("✅ Successfully subscribed to policy stream");
 
-        // 3. الاستماع للتحديثات بشكل غير متزامن
-        /*
-        while let Some(update) = stream.next().await {
+        // 3. Listen for updates
+        while let Some(update) = tokio_stream::StreamExt::next(&mut stream).await {
             let update = update?;
             info!("📥 Received policy update: {} (v{})", update.policy_type, update.version);
             
+            // SECURITY: Verify Signature (Action Protocol)
+            if let Err(e) = self.verify_signature(&update) {
+                error!("🚨 REJECTED: Policy v{} signature verification failed: {}", update.version, e);
+                continue; // Drop the malicious/corrupted policy
+            }
+            
             if update.policy_type == "sigma" {
-                // إرسال القاعدة الجديدة لمحرك Sigma المحلي للحقن الديناميكي
+                // 🛡️ Persistent Cache update
+                let _ = self.save_policy_to_cache(&update);
+
                 let mode = if update.enforcement_mode == "SHADOW" { RuleMode::Shadow } else { RuleMode::Enforce };
                 let rule = GuardedDynamicRule {
                     id: update.rule_id,
@@ -73,18 +127,87 @@ impl ControlPlaneClient {
                     title: format!("Control Plane Policy v{}", update.version),
                     mode,
                     created_at: Instant::now(),
-                    match_count: AtomicUsize::new(0),
+                    match_count: Arc::new(AtomicUsize::new(0)),
                     max_matches_per_minute: 100,
                     shadow_duration_secs: 3600,
                     source: RuleSource::HumanApproved,
                 };
-                let _ = _policy_tx.send(rule).await;
+                let _ = policy_tx.send(rule).await;
             }
         }
-        */
         
-        // محاكاة للاستعراض:
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        Ok(())
+    }
+
+    async fn load_and_inject_cached_policies(&self, policy_tx: mpsc::Sender<GuardedDynamicRule>) -> Result<()> {
+        if !std::path::Path::new(POLICY_CACHE_PATH).exists() {
+            return Ok(());
+        }
+
+        let data = std::fs::read_to_string(POLICY_CACHE_PATH)?;
+        let cached: Vec<pb::CachedPolicyUpdate> = serde_json::from_str(&data)?;
+        
+        info!("📂 Loading {} policies from local cache (Autonomous Mode)", cached.len());
+
+        for cached_update in cached {
+            let policy: PolicyUpdate = cached_update.into();
+            // Verify signature again to be safe
+            if self.verify_signature(&policy).is_ok() {
+                let mode = if policy.enforcement_mode == "SHADOW" { RuleMode::Shadow } else { RuleMode::Enforce };
+                let rule = GuardedDynamicRule {
+                    id: policy.rule_id,
+                    yaml_content: policy.content,
+                    title: format!("Cached Policy v{}", policy.version),
+                    mode,
+                    created_at: Instant::now(),
+                    match_count: Arc::new(AtomicUsize::new(0)),
+                    max_matches_per_minute: 100,
+                    shadow_duration_secs: 3600,
+                    source: RuleSource::HumanApproved,
+                };
+                let _ = policy_tx.send(rule).await;
+            }
+        }
+        Ok(())
+    }
+
+    fn save_policy_to_cache(&self, policy: &PolicyUpdate) -> Result<()> {
+        let mut cached_list = if std::path::Path::new(POLICY_CACHE_PATH).exists() {
+            let data = std::fs::read_to_string(POLICY_CACHE_PATH)?;
+            serde_json::from_str::<Vec<pb::CachedPolicyUpdate>>(&data).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        let wrapped = pb::CachedPolicyUpdate::from(policy.clone());
+
+        // Update or insert
+        if let Some(pos) = cached_list.iter().position(|p| p.rule_id == wrapped.rule_id) {
+            cached_list[pos] = wrapped;
+        } else {
+            cached_list.push(wrapped);
+        }
+
+        let data = serde_json::to_string_pretty(&cached_list)?;
+        std::fs::write(POLICY_CACHE_PATH, data)?;
+        Ok(())
+    }
+
+    fn verify_signature(&self, policy: &PolicyUpdate) -> Result<()> {
+        let mut data = Vec::new();
+        data.extend_from_slice(&policy.version.to_le_bytes());
+        data.extend_from_slice(policy.policy_type.as_bytes());
+        data.extend_from_slice(policy.rule_id.as_bytes());
+        data.extend_from_slice(policy.content.as_bytes());
+        data.extend_from_slice(policy.action.as_bytes());
+        data.extend_from_slice(policy.enforcement_mode.as_bytes());
+
+        let signature = Signature::from_slice(&policy.signature)
+            .map_err(|e| anyhow::anyhow!("Invalid signature format: {}", e))?;
+
+        self.verifying_key.verify(&data, &signature)
+            .map_err(|e| anyhow::anyhow!("Signature mismatch: {}", e))?;
+
         Ok(())
     }
 }
