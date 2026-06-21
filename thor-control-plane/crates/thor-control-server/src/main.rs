@@ -6,6 +6,14 @@ pub mod grpc;
 mod state_store;
 mod metrics;
 mod security;
+mod telemetry;
+// ── Production Hardening Modules ──────────────────────────────────────────────
+/// Byzantine-Robust Federated Learning Aggregation (Phase 8)
+pub mod fl_aggregator;
+/// Break-Glass Emergency Override Protocol (Phase 9)
+pub mod break_glass;
+/// Policy Canary Rollout with Auto-Rollback (Phase 10)
+pub mod canary_rollout;
 
 use anyhow::{Result, Context};
 use std::net::SocketAddr;
