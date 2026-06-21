@@ -144,6 +144,20 @@ impl MlEngine {
         }
     }
 
+    /// Helper for DetectionEngine to classify malware directly from an EnrichedEvent.
+    pub fn classify_malware_from_event(&self, event: &EnrichedEvent) -> Option<MalwarePrediction> {
+        // In a real implementation, we would extract behavioral features from the event history.
+        // For now, we simulate extraction from the current process context.
+        if let (Some(pid), Some(comm)) = (event.pid, &event.process_name) {
+            let mut behavior = crate::ml::malware_classifier::ProcessBehavior::new(pid, comm);
+            // Simulate minimal feature recording
+            let features = behavior.extract_features();
+            self.classify_malware(&features)
+        } else {
+            None
+        }
+    }
+
     /// Detect time-series anomalies in a host's behaviour window.
     /// Returns None when the detector is not loaded or the buffer is not full.
     pub fn detect_timeseries_anomaly(&self, buf: &WindowBuffer) -> Option<AnomalyResult> {
@@ -158,5 +172,11 @@ impl MlEngine {
                 None
             }
         }
+    }
+
+    /// Simple host-level recording and anomaly check.
+    pub fn detect_timeseries_anomaly_simple(&self, entity: &str, metric: &str, value: f64) -> Option<crate::ml::timeseries_anomaly::AnomalyWindow> {
+        let det = self.timeseries_detector.as_ref()?;
+        Some(det.record(metric, entity, value))
     }
 }
