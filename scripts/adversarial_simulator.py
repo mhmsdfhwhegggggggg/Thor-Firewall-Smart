@@ -8,7 +8,7 @@ Usage: sudo python3 tas.py --target 192.168.1.1 --attack ddos,rce,beacon
 import argparse
 import random
 import time
-from scapy.all import *
+from scapy.all import IP, TCP, UDP, DNS, DNSQR, Raw, send
 
 def simulate_ddos(target_ip):
     print(f"🔥 Starting SYN Flood against {target_ip}...")
