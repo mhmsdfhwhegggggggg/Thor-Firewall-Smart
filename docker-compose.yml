@@ -1,49 +1,60 @@
 version: '3.8'
 
 services:
-  # 1. قاعدة البيانات المركزية
+  # ─── Core Data Stores ─────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: thor
-      # Secure: Password injected from environment/secrets manager (e.g. Vault/AWS Secrets)
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-default_insecure_pass_do_not_use}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-thor_secure_pass}
       POSTGRES_DB: thor_control
     ports:
       - "5432:5432"
     volumes:
       - thor_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "thor" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - thor-net
 
-  # 2. ذاكرة التخزين المؤقت (للسرعة الفائقة)
   redis:
     image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
     ports:
       - "6379:6379"
     networks:
       - thor-net
 
-  # 3. خادم التحكم المركزي (Control Plane)
+  # ─── Control Plane ────────────────────────────────────────────────────────────
   thor-control-server:
     build:
       context: ./thor-control-plane/crates/thor-control-server
       dockerfile: Dockerfile
     ports:
       - "50051:50051" # gRPC
-      - "8080:8080"   # REST API
+      - "8080:8080" # REST API
+      - "9090:9090" # Prometheus metrics
     environment:
-      # Secure: URL injected from environment
-      DATABASE_URL: ${DATABASE_URL:-postgres://thor:default_insecure_pass_do_not_use@postgres:5432/thor_control}
+      DATABASE_URL: postgres://thor:${POSTGRES_PASSWORD:-thor_secure_pass}@postgres:5432/thor_control
       REDIS_URL: redis://redis:6379
       RUST_LOG: info
+      # 📡 OpenTelemetry — points to Jaeger OTLP receiver
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: thor-control-plane
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      jaeger:
+        condition: service_started
     networks:
       - thor-net
 
-  # 4. لوحة التحكم (Dashboard)
+  # ─── Dashboard ────────────────────────────────────────────────────────────────
   thor-dashboard:
     build:
       context: ./dashboard
@@ -57,8 +68,75 @@ services:
     networks:
       - thor-net
 
+  # ─── Observability Stack (ERA: Full-Stack Telemetry) ─────────────────────────
+
+  # Distributed Tracing (Jaeger all-in-one)
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+    networks:
+      - thor-net
+
+  # Metrics collection
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9091:9090"
+    depends_on:
+      - thor-control-server
+    networks:
+      - thor-net
+
+  # Dashboards and visualization
+  grafana:
+    image: grafana/grafana:10.3.3
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-thor_admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - thor_grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+      - jaeger
+    networks:
+      - thor-net
+
+  # ─── Integration Test Runner (Phase 2 Task: Docker-based E2E Tests) ───────────
+  thor-integration-tests:
+    image: rust:1.76-slim
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:ro
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq pkg-config libssl-dev &&
+             cargo test --test integration_phase2 --test era_scenario_validation --
+             --test-threads=4 2>&1"
+    environment:
+      RUST_LOG: warn
+      THOR_CONTROL_URL: http://thor-control-server:8080
+      THOR_GRPC_URL: http://thor-control-server:50051
+    depends_on:
+      - thor-control-server
+    profiles:
+      - test # Only runs with: docker compose --profile test up
+    networks:
+      - thor-net
+
 volumes:
   thor_db_data:
+  thor_grafana_data:
+
 
 networks:
   thor-net:
