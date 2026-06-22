@@ -1,0 +1,95 @@
+version: '3.8'
+# Aegis XDR — Integration Test Environment
+# Phase 1: Stability & Infrastructure Testing
+# Usage: docker compose -f tests/integration/docker-compose.test.yml up -d
+
+services:
+  test-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: thor_test
+      POSTGRES_USER: thor_test
+      POSTGRES_PASSWORD: thor_test_secret
+    ports: ["5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thor_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  test-redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+
+  test-control-plane:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+      target: control-plane
+    environment:
+      DATABASE_URL: postgres://thor_test:thor_test_secret@test-postgres:5432/thor_test
+      THOR_JWT_SECRET: integration_test_secret_64chars_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      THOR_GRPC_PORT: "50051"
+      RUST_LOG: info,thor=debug
+    ports:
+      - "50052:50051"
+      - "8081:8080"
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  test-thor-agent:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    environment:
+      THOR_API_ADDR: "0.0.0.0:8082"
+      THOR_METRICS_BIND: "0.0.0.0:9091"
+      THOR_JWT_SECRET: integration_test_secret_64chars_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      THOR_ADMIN_PASSWORD_HASH: "$$argon2id$$v=19$$m=65536,t=3,p=4$$c2FsdHNhbHQ$$placeholder_hash"
+      THOR_ML_THRESHOLD: "0.495"
+      THOR_CONTROL_PLANE_URL: "http://test-control-plane:50051"
+      THOR_INTERFACE: "lo"
+      RUST_LOG: info,thor=debug
+    ports:
+      - "8082:8082"
+      - "9091:9091"
+    depends_on:
+      test-control-plane:
+        condition: service_healthy
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/health || exit 1"]
+      interval: 10s
+      retries: 10
+
+  # Attack simulation container (chaos tests only)
+  test-attacker:
+    image: debian:bookworm-slim
+    command: ["sh", "-c", "apt-get update -qq && apt-get install -y -qq netcat-openbsd hping3 curl && sleep infinity"]
+    networks: [test-net]
+    profiles: ["chaos"]
+
+  test-prometheus:
+    image: prom/prometheus:v2.48.0
+    volumes:
+      - ../../configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9094:9090"]
+    profiles: ["observability"]
+
+networks:
+  test-net:
+    driver: bridge
+
+volumes:
+  test-pgdata:
