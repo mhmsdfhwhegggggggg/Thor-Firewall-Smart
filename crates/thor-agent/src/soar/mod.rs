@@ -29,7 +29,7 @@ use crate::events::Alert;
 use crate::state::ThorState;
 use thor_common::{ThreatLevel, ResponseActionType};
 
-use isolation::NetworkIsolator;
+use isolation::{NetworkIsolator, ProcessSuspender};
 use quarantine::FileQuarantiner;
 use forensics::ForensicCollector;
 
@@ -232,6 +232,8 @@ pub struct SoarEngine {
     circuit_breaker: CircuitBreaker,
     /// Whitelist: IPs/CIDRs that should never be auto-blocked
     whitelist: Vec<String>,
+    /// Phase 9: Process suspension engine for non-destructive banking quarantine
+    pub suspender: ProcessSuspender,
 }
 
 impl SoarEngine {
@@ -257,6 +259,7 @@ impl SoarEngine {
             correlator: AlertCorrelator::new(),
             circuit_breaker: CircuitBreaker::new(max_blocks),
             whitelist,
+            suspender: ProcessSuspender::new(),
         }
     }
 
@@ -289,15 +292,41 @@ impl SoarEngine {
             }
             actions.push("era_action:shaping".to_string());
         } else if confidence >= 0.50 {
-            // 🔍 [Level 1] INSPECTION: Redirect to Sidecar (Envoy) for deep analysis
+            // 🔒 [Level 2] QUARANTINE: SIGSTOP process + deep inspection (Phase 6 + Phase 9)
+            // Non-destructive suspension preserves forensic evidence while awaiting HITL decision.
+            // Banking compliance: EBA/GL/2019/04 requires non-destructive suspension over auto-termination.
             if let Some(ip) = &alert.src_ip {
                 self.state.inspecting_ips.insert(ip.clone(), true);
                 actions.push(format!("deep_inspection:{}", ip));
             }
-            actions.push("era_action:inspection".to_string());
+            if let Some(pid) = alert.pid {
+                let xai_explanation = alert.xai_report.as_ref()
+                    .map(|r| r.explanation.clone())
+                    .unwrap_or_else(|| format!("ML anomaly score={:.3}", confidence));
+                let process_name = alert.process_name.clone().unwrap_or_else(|| "unknown".to_string());
+
+                match self.suspender.suspend_process(
+                    pid,
+                    alert.id.clone(),
+                    xai_explanation.clone(),
+                    process_name.clone(),
+                ).await {
+                    Ok(_) => {
+                        actions.push(format!("process_quarantined:pid={} (SIGSTOP)", pid));
+                        actions.push("era_action:quarantine_hitl_pending".to_string());
+                        info!("🔒 PID {} quarantined (SIGSTOP) — XAI: {}", pid, xai_explanation);
+                    }
+                    Err(e) => {
+                        warn!("⚠️ SIGSTOP failed for PID {}: {} — falling back to network isolation", pid, e);
+                        let _ = self.isolator.isolate_process(pid).await;
+                        actions.push(format!("process_network_isolated:pid={}", pid));
+                    }
+                }
+            }
+            actions.push("era_action:quarantine".to_string());
         } else {
-            // 📝 [Level 0] TELEMETRY: Log only for behavioral baseline
-            actions.push("era_action:telemetry_only".to_string());
+            // 📝 [Level 0] ALLOW + TELEMETRY: Log only for behavioral baseline
+            actions.push("era_action:allow_with_telemetry".to_string());
         }
 
         // Forensics capture for High/Critical regardless of score if PID exists
