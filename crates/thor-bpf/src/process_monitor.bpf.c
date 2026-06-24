@@ -20,9 +20,14 @@ struct {
     __type(value, struct thor_stats);
 } thor_stats SEC(".maps");
 
-/* Tracked process whitelist (pid → 1) */
+/* Tracked process whitelist (pid → 1)
+ * Phase 5 Hardening: PERCPU_LRU_HASH eliminates cross-core locking at high exec rates.
+ * Each CPU maintains its own LRU entry set → zero contention on write-heavy workloads.
+ * Trade-off: a process tracked on CPU-0 may not be visible on CPU-1 lookup,
+ * but for exec-rate monitoring the per-CPU view is sufficient and far faster.
+ */
 struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(type, BPF_MAP_TYPE_PERCPU_LRU_HASH);
     __uint(max_entries, MAX_TRACKED_PROCS);
     __type(key, __u32);
     __type(value, __u8);
@@ -75,7 +80,8 @@ int thor_trace_exec(struct sched_process_exec_args *ctx) {
 
     __u32 zero = 0;
     struct thor_stats *stats = bpf_map_lookup_elem(&thor_stats, &zero);
-    if (stats) __sync_fetch_and_add(&stats->process_exec_events, 1);
+    /* Phase 5: PERCPU_ARRAY stats — no atomic ops needed, each CPU writes its own slot */
+    if (stats) stats->process_exec_events++;
 
     bpf_ringbuf_submit(e, 0);
     return 0;
@@ -95,7 +101,8 @@ int thor_trace_exit(struct sched_process_exit_args *ctx) {
 
     __u32 zero = 0;
     struct thor_stats *stats = bpf_map_lookup_elem(&thor_stats, &zero);
-    if (stats) __sync_fetch_and_add(&stats->process_exit_events, 1);
+    /* Phase 5: PERCPU_ARRAY stats — per-CPU write, aggregated in userspace */
+    if (stats) stats->process_exit_events++;
 
     bpf_ringbuf_submit(e, 0);
     return 0;
