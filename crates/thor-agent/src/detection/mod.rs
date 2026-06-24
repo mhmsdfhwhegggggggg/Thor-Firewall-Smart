@@ -86,7 +86,7 @@ impl DetectionEngine {
             ml_threshold,
         );
 
-        let zero_day = Arc::new(zero_day::ZeroDayEngine::new(0.55));
+        let zero_day = Arc::new(zero_day::ZeroDayEngine::new());
         info!("🎯 ZeroDayEngine initialized: threshold=0.55 (maps to Quarantine for score≥0.75)");
 
         Ok(Self { sigma, yara, ioc_checker, ids, ml, ml_threshold, zero_day })
