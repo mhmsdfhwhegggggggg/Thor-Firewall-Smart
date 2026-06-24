@@ -143,17 +143,17 @@ impl RateLimiter {
 /// PII Redactor — removes sensitive data before LLM submission
 fn redact_pii(text: &str) -> String {
     // Replace IPs with placeholders
-    let ip_re = regex_lite::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b")
+    let ip_re = regex::Regex::new(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b")
         .unwrap_or_else(|_| unreachable!());
     let text = ip_re.replace_all(text, "[IP_REDACTED]");
 
     // Replace hostnames (simple heuristic)
-    let host_re = regex_lite::Regex::new(r"\b([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}\b")
+    let host_re = regex::Regex::new(r"\b([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}\b")
         .unwrap_or_else(|_| unreachable!());
     let text = host_re.replace_all(&text, "[HOST_REDACTED]");
 
     // Replace UUIDs
-    let uuid_re = regex_lite::Regex::new(
+    let uuid_re = regex::Regex::new(
         r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"
     ).unwrap_or_else(|_| unreachable!());
     uuid_re.replace_all(&text, "[UUID_REDACTED]").to_string()
