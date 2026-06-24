@@ -293,10 +293,18 @@ impl MlEngine {
     }
 
     /// Score an event for UEBA anomaly. Returns Some(0.0..1.0) or None if unavailable.
-    pub async fn score(&self, event: &EnrichedEvent) -> Option<f32> {
+    /// Score an event for anomaly probability.
+    /// Returns (score, xai_weights) or None if model not loaded.
+    pub async fn score_with_xai(&self, event: &EnrichedEvent) -> Option<(f32, Vec<FeatureWeight>)> {
         let scorer = self.scorer.as_ref()?;
         let features = extract_features(event);
-        scorer.score(&features).ok()
+        scorer.score(features).ok()
+    }
+
+    /// Score an event — returns only the anomaly probability (legacy API).
+    /// Callers that need XAI should use score_with_xai() instead.
+    pub async fn score(&self, event: &EnrichedEvent) -> Option<f32> {
+        self.score_with_xai(event).await.map(|(score, _)| score)
     }
 
     /// Classify a process/file sample as a malware family.
