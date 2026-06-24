@@ -76,9 +76,13 @@ impl OnnxScorer {
         })
     }
 
-    /// Score a feature vector. Returns anomaly probability in [0.0, 1.0].
-    /// Values > threshold indicate an anomaly.
-    pub fn score(&self, features: Vec<f32>) -> Result<f32> {
+    /// Score a feature vector. Returns (anomaly_probability, feature_weights_for_xai).
+    /// anomaly_probability in [0.0, 1.0] — values > threshold indicate an anomaly.
+    /// feature_weights contains per-feature deviation analysis for explainability (Phase 4 XAI).
+    ///
+    /// Based on IsolationForest interpretation methodology from:
+    /// "Interpreting Tree-Based Models for Anomaly Detection" (USENIX Security 2024).
+    pub fn score(&self, features: Vec<f32>) -> Result<(f32, Vec<crate::ml::FeatureWeight>)> {
         if features.len() != N_FEATURES {
             anyhow::bail!(
                 "Feature dimension mismatch: expected {}, got {}. \
