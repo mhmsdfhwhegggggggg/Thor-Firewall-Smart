@@ -125,8 +125,8 @@ impl DetectionEngine {
         }
         alerts.extend(yara_alerts);
 
-        // 5. ML anomaly detection (Ensemble Intelligence)
-        if let Some(xai_score) = self.ml.score(event).await {
+        // 5. ML anomaly detection (Ensemble Intelligence) with XAI
+        if let Some((xai_score, feature_weights)) = self.ml.score_with_xai(event).await {
             let threshold = self.ml_threshold as f32;
             if xai_score > threshold {
                 // 🔍 NEW: Deep Behavioral Classification
@@ -155,7 +155,20 @@ impl DetectionEngine {
                     dst_port: None,
                     ml_score: Some(xai_score),
                     confidence_score: final_confidence,
-                    xai_report: None, 
+                    xai_report: Some(crate::ml::XaiReport {
+                        model_version: "thor-isolation-forest-v3-2026".to_string(),
+                        anomaly_score: xai_score,
+                        threshold: self.ml_threshold as f32,
+                        top_features: feature_weights,
+                        explanation: format!(
+                            "[ML XAI] Score={:.3} threshold={:.3} ({}) — {}",
+                            xai_score, self.ml_threshold,
+                            if xai_score > self.ml_threshold as f32 { "ANOMALOUS" } else { "normal" },
+                            classify_anomaly(xai_score, self.ml_threshold as f32)
+                        ),
+                        active_feature_count: 28,
+                        generated_at: chrono::Utc::now().to_rfc3339(),
+                    }),
                     soar_actions_taken: vec![],
                     raw_event_type: event.raw.source().to_string(),
                 });
