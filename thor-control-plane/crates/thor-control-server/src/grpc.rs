@@ -43,6 +43,105 @@ impl DelegationManager {
         info!("Delegation check: Authority validated for agent {} to execute {}", agent_id, action);
         true 
     }
+
+
+    // ─── Phase 10: Remote Resolution Command Stream ───────────────────────────
+
+    type StreamResolutionCommandsStream = Pin<Box<
+        dyn futures::Stream<Item = Result<QuarantineResolution, Status>> + Send + 'static
+    >>;
+
+    /// Stream resolution commands to an agent for quarantined entities.
+    /// Administrators push RESOLVE_BLOCK or RESOLVE_RELEASE directives here.
+    /// Commands are Ed25519-signed for chain-of-custody compliance.
+    async fn stream_resolution_commands(
+        &self,
+        request: Request<ResolutionStreamRequest>,
+    ) -> Result<Response<Self::StreamResolutionCommandsStream>, Status> {
+        let req = request.into_inner();
+        info!("🔗 Resolution stream opened: agent_id={}", req.agent_id);
+
+        // Subscribe to the resolution broadcast channel
+        let rx = self.state.resolution_tx.subscribe();
+        let agent_id = req.agent_id.clone();
+        let signing_key = self.state.signing_key.clone();
+
+        let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
+            .filter_map(move |result| {
+                let agent_id = agent_id.clone();
+                let signing_key = signing_key.clone();
+                async move {
+                    match result {
+                        Ok(mut resolution) => {
+                            // Only send directives meant for this agent
+                            if resolution.resolution_id.contains(&agent_id)
+                                || resolution.resolution_id.is_empty()
+                            {
+                                // Sign the resolution directive for chain-of-custody
+                                if let Some(key) = &signing_key {
+                                    let mut data = Vec::new();
+                                    data.extend_from_slice(resolution.resolution_id.as_bytes());
+                                    data.extend_from_slice(resolution.alert_id.as_bytes());
+                                    data.extend_from_slice(resolution.target_pid_or_ip.as_bytes());
+                                    data.extend_from_slice(&(resolution.action as i32).to_le_bytes());
+                                    data.extend_from_slice(resolution.operator_id.as_bytes());
+                                    let sig = key.sign(&data);
+                                    resolution.signature = sig.to_bytes().to_vec();
+                                }
+                                Some(Ok(resolution))
+                            } else {
+                                None
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            warn!("Resolution stream lagged {} messages for agent {}", n, agent_id);
+                            None
+                        }
+                        Err(_) => None,
+                    }
+                }
+            });
+
+        Ok(Response::new(Box::pin(stream)))
+    }
+
+    /// Agent reports its current quarantine state for the HITL dashboard.
+    async fn report_quarantine_state(
+        &self,
+        request: Request<QuarantineStateReport>,
+    ) -> Result<Response<QuarantineStateAck>, Status> {
+        let report = request.into_inner();
+        info!(
+            "📊 Quarantine state report from agent_id={}: {} entities quarantined",
+            report.agent_id, report.entities.len()
+        );
+
+        // Store quarantine state in the agent_manager for the dashboard
+        for entity in &report.entities {
+            info!(
+                "  ⚠️  Quarantined: pid_or_ip={} process={} score={} reason={}",
+                entity.target_pid_or_ip,
+                entity.process_name,
+                entity.anomaly_score,
+                entity.xai_explanation
+            );
+        }
+
+        // Persist to state store for dashboard retrieval
+        if let Err(e) = self.state.agent_manager
+            .update_quarantine_state(&report.agent_id, report.entities.len() as u32)
+            .await
+        {
+            warn!("Failed to persist quarantine state: {}", e);
+        }
+
+        Ok(Response::new(QuarantineStateAck {
+            accepted: true,
+            message: format!("Quarantine state recorded: {} entities pending HITL review", 
+                           report.entities.len()),
+        }))
+    }
+
 }
 
 #[tonic::async_trait]
