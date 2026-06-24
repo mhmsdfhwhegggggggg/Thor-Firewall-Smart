@@ -190,13 +190,17 @@ async fn main() -> Result<()> {
     let agent_manager = Arc::new(AgentManager::new()); 
     let metrics = Arc::new(metrics::ControlMetrics::new());
 
-    let state = AppState {
+    let state = // Phase 10: Resolution broadcast channel for HITL quarantine flow
+    let (resolution_tx, _) = tokio::sync::broadcast::channel::<grpc::pb::QuarantineResolution>(256);
+
+    AppState {
         db: db.clone(),
         agent_manager,
         policy_tx,
         signing_key: Arc::new(signing_key),
         state_store,
         metrics: metrics.clone(),
+        resolution_tx: Arc::new(resolution_tx),
     };
 
     // ── Metrics Server ────────────────────────────────────────────────────────
