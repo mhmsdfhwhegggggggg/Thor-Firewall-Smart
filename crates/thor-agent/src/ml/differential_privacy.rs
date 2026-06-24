@@ -194,13 +194,18 @@ impl DpGradientProcessor {
             .map(|&g| g as f64 * clip_factor)
             .collect();
 
-        // Step 2: Add Gaussian noise N(0, (σC)²)
+        // Step 2: Add Gaussian noise N(0, (σC)²) using cryptographically secure RNG
+        // SECURITY: Using rand::thread_rng() which seeds from OS entropy (/dev/urandom).
+        // DO NOT use deterministic seeds — that would break differential privacy guarantee.
+        // rand = "0.8" already in Cargo.toml; rand_distr for Gaussian distribution.
+        use rand::Rng;
         let noise_scale = self.config.noise_multiplier * self.config.max_grad_norm;
-        let noisy: Vec<f32> = clipped.iter().enumerate().map(|(i, &g)| {
-            // Box-Muller transform for Gaussian noise (deterministic seed per position)
-            let u1 = (1.0 + (i as f64 * 0.1 + 0.5).sin()) / 2.0;
-            let u2 = (1.0 + ((i as f64 + 1.0) * 0.17 + 0.3).cos()) / 2.0;
-            let z = (-2.0 * u1.max(1e-10).ln()).sqrt() * (2.0 * PI * u2).cos();
+        let mut rng = rand::thread_rng();
+        let noisy: Vec<f32> = clipped.iter().map(|&g| {
+            // Box-Muller with OS-seeded random — truly differentially private
+            let u1: f64 = rng.gen::<f64>().max(1e-300); // avoid log(0)
+            let u2: f64 = rng.gen::<f64>();
+            let z = (-2.0 * u1.ln()).sqrt() * (2.0 * PI * u2).cos();
             (g + z * noise_scale) as f32
         }).collect();
 
