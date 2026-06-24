@@ -23,6 +23,14 @@ service ThorControlService {
     
     // 6. بث بصمات الهجوم العالمية (Global Threat Intelligence Graph)
     rpc BroadcastThreat(ThreatIndicator) returns (ThreatIndicatorAck);
+
+    // 7. Phase 10: Remote Resolution Command Stream (HITL — Human-In-The-Loop)
+    // Administrator reviews XAI report and streams resolution directives to quarantined agents.
+    // RESOLVE_BLOCK → terminate process, RESOLVE_RELEASE → SIGCONT + temporary whitelist.
+    rpc StreamResolutionCommands(ResolutionStreamRequest) returns (stream QuarantineResolution);
+
+    // 8. Phase 10: Agent reports quarantine state to Control Plane for HITL dashboard
+    rpc ReportQuarantineState(QuarantineStateReport) returns (QuarantineStateAck);
 }
 
 // --- الرسائل (Messages) ---
@@ -150,5 +158,57 @@ message ThreatIndicator {
 
 message ThreatIndicatorAck {
     bool distributed_globally = 1;
+    string message = 2;
+}
+
+
+// ─── Phase 10: Quarantine Resolution Protocol ─────────────────────────────────
+
+// Resolution actions an administrator can take on a quarantined process
+enum ResolutionAction {
+    RESOLVE_BLOCK   = 0;   // Terminate the quarantined process (SIGKILL)
+    RESOLVE_RELEASE = 1;   // Resume execution (SIGCONT) + apply temporary whitelist
+    RESOLVE_ESCALATE = 2;  // Escalate to incident response team (preserve state)
+}
+
+// Request from agent to start receiving resolution commands for its quarantines
+message ResolutionStreamRequest {
+    string agent_id    = 1;
+    string agent_token = 2;
+}
+
+// Resolution directive sent from Control Plane to agent
+message QuarantineResolution {
+    string resolution_id     = 1;  // UUID of this resolution directive
+    string alert_id          = 2;  // ID of the triggering alert
+    string target_pid_or_ip  = 3;  // PID (process) or IP (network quarantine)
+    ResolutionAction action  = 4;  // What to do with the quarantined entity
+    string reason            = 5;  // Human-readable reason from administrator
+    string operator_id       = 6;  // Identity of the administrator who resolved
+    int64  timestamp         = 7;  // Unix timestamp of decision
+    bytes  signature         = 8;  // Ed25519 signature for chain-of-custody
+    bool   apply_whitelist   = 9;  // Whether to temporarily whitelist the entity
+    int64  whitelist_ttl_s   = 10; // Seconds to maintain the whitelist entry (0 = permanent)
+}
+
+// Agent reports its current quarantine state (for HITL dashboard)
+message QuarantineStateReport {
+    string agent_id = 1;
+    repeated QuarantinedEntity entities = 2;
+    int64 timestamp = 3;
+}
+
+// A single quarantined entity
+message QuarantinedEntity {
+    string alert_id       = 1;
+    string target_pid_or_ip = 2;
+    string process_name   = 3;
+    int64  suspended_at   = 4;
+    string xai_explanation = 5;  // Human-readable XAI reasoning
+    string anomaly_score  = 6;   // ML score as string (e.g., "0.82")
+}
+
+message QuarantineStateAck {
+    bool accepted = 1;
     string message = 2;
 }
