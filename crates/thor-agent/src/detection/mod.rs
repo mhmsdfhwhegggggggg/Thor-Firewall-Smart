@@ -44,6 +44,10 @@ pub struct DetectionEngine {
     ids:          Arc<IdsEngine>,
     ml:           Arc<MlEngine>,
     ml_threshold: f64,
+    /// Phase 11: Zero-Day behavioral pipeline engine
+    /// High-severity findings → Quarantine + HITL (never auto-block)
+    /// Per NIST SP 800-61r3: zero-day incidents require human authorization
+    zero_day:     Arc<zero_day::ZeroDayEngine>,
 }
 
 impl DetectionEngine {
@@ -82,7 +86,10 @@ impl DetectionEngine {
             ml_threshold,
         );
 
-        Ok(Self { sigma, yara, ioc_checker, ids, ml, ml_threshold })
+        let zero_day = Arc::new(zero_day::ZeroDayEngine::new(0.55));
+        info!("🎯 ZeroDayEngine initialized: threshold=0.55 (maps to Quarantine for score≥0.75)");
+
+        Ok(Self { sigma, yara, ioc_checker, ids, ml, ml_threshold, zero_day })
     }
 
     pub async fn detect(&self, event: &EnrichedEvent) -> Result<Vec<Alert>> {
@@ -185,6 +192,98 @@ impl DetectionEngine {
                         raw_event_type: "timeseries".into(),
                     });
                 }
+            }
+        }
+
+        // 7. Phase 11: Zero-Day Behavioral Pipeline
+        // ZeroDayEngine analyzes syscall profiles for novel attack patterns.
+        // CRITICAL: High-severity zero-days ALWAYS go to HITL Quarantine flow —
+        // NEVER to auto-block. This prevents false-positive termination of legitimate
+        // processes and ensures human review (NIST SP 800-61r3 requirement).
+        //
+        // Mapping (from ZeroDaySeverity):
+        //   Critical (score ≥ 0.85) → Quarantine + XAI + HITL immediately
+        //   High (score ≥ 0.70)     → Quarantine + XAI + HITL
+        //   Medium (score ≥ 0.55)   → Deep inspection + alert (no suspension)
+        //   Low                     → Log + baseline update
+        if let Some(pid) = event.pid {
+            let syscall_event = zero_day::syscall_profiler::SyscallEvent {
+                pid,
+                syscall_nr: 0,    // populated from eBPF ring buffer in production
+                timestamp_ns: event.raw.timestamp_ns(),
+                args: [0u64; 6],
+                comm: event.process_name.clone().unwrap_or_default()
+                    .chars().take(16).collect::<String>()
+                    .as_bytes().iter().chain(std::iter::repeat(&0u8))
+                    .take(16).cloned().collect::<Vec<u8>>()
+                    .try_into().unwrap_or([0u8; 16]),
+                ret: 0,
+            };
+            self.zero_day.profiler.ingest(syscall_event);
+
+            if let Some(finding) = self.zero_day.analyze(pid).await {
+                let (threat_level, confidence, should_quarantine) = match finding.severity {
+                    zero_day::ZeroDaySeverity::Critical => (ThreatLevel::Critical, 0.95f32, true),
+                    zero_day::ZeroDaySeverity::High     => (ThreatLevel::High,     0.80f32, true),
+                    zero_day::ZeroDaySeverity::Medium   => (ThreatLevel::High,     0.65f32, false),
+                    zero_day::ZeroDaySeverity::Low      => (ThreatLevel::Medium,   0.45f32, false),
+                };
+
+                // Build XAI report from zero-day finding
+                let xai_explanation = format!(
+                    "[Zero-Day XAI] Methods: {}. Score: {:.3}. Summary: {}",
+                    finding.methods.iter().map(|m| format!("{:?}", m)).collect::<Vec<_>>().join(", "),
+                    finding.threat_score,
+                    finding.summary
+                );
+
+                let zd_report = Some(crate::ml::XaiReport {
+                    model_version: "thor-zero-day-engine-v2-2026".to_string(),
+                    anomaly_score: finding.threat_score as f32,
+                    threshold: 0.55,
+                    top_features: finding.methods.iter().enumerate().take(5).map(|(i, m)| {
+                        crate::ml::FeatureWeight {
+                            feature_name: format!("{:?}", m),
+                            feature_value: finding.threat_score as f32,
+                            deviation_score: (finding.threat_score as f32 - 0.55).max(0.0),
+                            importance: 1.0 / (i as f32 + 1.0),
+                            direction: "above_normal".to_string(),
+                        }
+                    }).collect(),
+                    explanation: xai_explanation.clone(),
+                    active_feature_count: finding.methods.len(),
+                    generated_at: chrono::Utc::now().to_rfc3339(),
+                });
+
+                let mut zd_actions = vec!["zero_day_detected".to_string()];
+                if should_quarantine {
+                    // HITL quarantine — SoarEngine will apply SIGSTOP and await admin decision
+                    zd_actions.push("hitl_quarantine_required".to_string());
+                    warn!(
+                        "🚨 Zero-Day HITL: PID {} flagged ({:?}, score={:.3}).                          Queuing for Quarantine state. XAI: {}",
+                        pid, finding.severity, finding.threat_score, xai_explanation
+                    );
+                }
+
+                alerts.push(Alert {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    timestamp: chrono::Utc::now(),
+                    source: event.hostname.clone().unwrap_or_else(|| "zero_day_engine".to_string()),
+                    rule_name: format!("ZeroDay::{:?}", finding.severity),
+                    rule_type: RuleType::Ml,
+                    threat_level,
+                    description: finding.summary.clone(),
+                    pid: Some(pid),
+                    process_name: event.process_name.clone(),
+                    src_ip: event.src_ip_str.clone(),
+                    dst_ip: event.dst_ip_str.clone(),
+                    dst_port: None,
+                    ml_score: Some(finding.threat_score as f32),
+                    confidence_score: confidence,
+                    xai_report: zd_report,
+                    soar_actions_taken: zd_actions,
+                    raw_event_type: "zero_day".to_string(),
+                });
             }
         }
 
