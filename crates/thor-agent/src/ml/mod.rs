@@ -12,6 +12,9 @@ pub mod onnx_scorer;
 pub mod timeseries_anomaly;
 pub mod ueba;
 pub mod campaign_correlator;
+pub mod flow_transformer;
+pub mod llm_orchestrator;
+pub mod differential_privacy;
 pub mod kill_chain;
 
 use anyhow::Result;
@@ -345,3 +348,8 @@ impl MlEngine {
         Some(det.record(metric, entity, value))
     }
 }
+
+// ─── Tier 2 Re-exports ────────────────────────────────────────────────────────
+pub use self::flow_transformer::{FlowTransformer, FlowTransformerConfig, FlowTransformerResult};
+pub use self::llm_orchestrator::{LlmOrchestrator, LlmConfig, TriageResult, IncidentPlaybook};
+pub use self::differential_privacy::{DpGradientProcessor, DpConfig, PrivacyAccountant, PrivacyReport};
