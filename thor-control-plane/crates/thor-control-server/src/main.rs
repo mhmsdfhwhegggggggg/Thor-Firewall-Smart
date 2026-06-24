@@ -40,6 +40,9 @@ pub struct AppState {
     pub signing_key: Arc<ed25519_dalek::SigningKey>,
     pub state_store: Arc<state_store::RedbStateStore>,
     pub metrics: Arc<metrics::ControlMetrics>,
+    /// Phase 10: Broadcast channel for HITL resolution directives
+    /// Admin API sends QuarantineResolution here → grpc.rs streams to agents
+    pub resolution_tx: Arc<tokio::sync::broadcast::Sender<grpc::pb::QuarantineResolution>>,
 }
 
 async fn create_policy(
