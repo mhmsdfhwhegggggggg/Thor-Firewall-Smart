@@ -1,3 +1,31 @@
+## [Unreleased] — Production Hardening Phase 2
+
+### Added
+- `Makefile` — Full developer workflow automation (build/test/docker/k8s/helm/sbom/release)
+- Per-crate multi-stage `Dockerfile` for `thor-agent-net`, `thor-agent-web`, `thor-agent-srv`, `thor-soc-slm` (distroless/nonroot)
+- `.github/workflows/docker.yml` — Docker build/push to GHCR + Trivy scanning + cosign signing + SPDX SBOM attestation
+- `helm/thor-firewall/` — Complete Helm chart (Chart.yaml + values.yaml + HPA templates + helpers)
+- `k8s/thor-hpa.yaml` — HPA for `agent-web` (3→50), `soc-slm` (2→10), `agent-srv` (2→20)
+- `k8s/thor-configmap.yaml` — ConfigMap with `thor.yaml` + Prometheus `ServiceMonitor` CRD
+- `k8s/thor-deployments.yaml` — Deployments for `thor-agent-web` + `thor-soc-slm` with zero-downtime RollingUpdate
+- `crates/thor-ids/benches/detection_engine.rs` — Criterion benchmarks (Aho-Corasick WAF throughput)
+- `.github/workflows/coverage.yml` — Code coverage (cargo-llvm-cov + Codecov + 60% threshold gate)
+- `migrations/002_decisions.sql` — SOC decisions + Federated Learning model versions + gradient deltas tables
+- `scripts/install.sh` — One-shot production installation with systemd service
+- `scripts/health_check.sh` — Production health check (API + metrics + DB + Redis + certs + K8s)
+- `configs/grafana/provisioning/` — Auto-provisioned datasources (Prometheus + Jaeger + PostgreSQL)
+- `configs/grafana/dashboards/thor-overview.json` — Security Overview dashboard (XDP + ML + WAF + agent fleet)
+- `configs/vector.toml` — Vector log aggregation pipeline (Docker → Elasticsearch/Kafka/Prometheus)
+- `.github/CODEOWNERS` — Automatic review assignment
+- `CONTRIBUTING.md` — Full contributor guide (setup, code standards, branch strategy, commit format)
+
+### Changed
+- `monitoring/prometheus.yml` — Full scrape config for all 5 agents + PostgreSQL + Redis + Kafka + Node exporter
+- `.cargo/config.toml` — Aggressive release optimizations (LLD + native CPU + SIMD + aliases)
+
+### Removed
+- `Cargo.toml.bak` — Stale backup file
+
 # Thor Firewall Smart — Changelog
 
 ## [v0.3.0] — Phase 0: Zero-Trust Foundation (2026-06-19)
