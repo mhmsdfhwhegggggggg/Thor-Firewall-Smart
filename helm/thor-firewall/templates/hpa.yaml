@@ -1,0 +1,68 @@
+{{- if .Values.agentWeb.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "thor-firewall.fullname" . }}-agent-web
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "thor-firewall.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent-web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "thor-firewall.fullname" . }}-agent-web
+  minReplicas: {{ .Values.agentWeb.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.agentWeb.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.agentWeb.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+{{- end }}
+---
+{{- if .Values.soc.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "thor-firewall.fullname" . }}-soc
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "thor-firewall.labels" . | nindent 4 }}
+    app.kubernetes.io/component: soc
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "thor-firewall.fullname" . }}-soc
+  minReplicas: {{ .Values.soc.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.soc.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.soc.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
