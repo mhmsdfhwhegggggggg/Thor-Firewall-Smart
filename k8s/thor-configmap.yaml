@@ -1,0 +1,102 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — K8s ConfigMap
+# Contains: thor.yaml main config + logging config
+# Apply: kubectl apply -f k8s/thor-configmap.yaml
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thor-config
+  namespace: thor-firewall
+  labels:
+    app.kubernetes.io/name: thor-firewall
+    app.kubernetes.io/component: config
+data:
+  thor.yaml: |
+    # Thor Firewall Smart — Runtime Configuration
+    # Secrets must be passed as environment variables (see thor-secrets.yaml)
+    interface: eth0
+    api_addr: "0.0.0.0:8080"
+    metrics_bind: "0.0.0.0:9090"
+    sigma_rules_dir: "/etc/thor/rules/sigma"
+    yara_rules_dir: "/etc/thor/rules/yara"
+    ids_rules_dir: "/etc/thor/rules/suricata"
+    fim:
+      enabled: true
+      watch_paths:
+        - /etc
+        - /usr/bin
+        - /usr/sbin
+        - /var/lib/thor
+    intel:
+      sync_interval_secs: 3600
+      feeds:
+        otx: true
+        abuse_ch: true
+        threatfox: true
+        feodo: true
+        tor: true
+        spamhaus: true
+    detection:
+      sigma_enabled: true
+      yara_enabled: true
+      ml_enabled: true
+      ml_threshold: 0.75
+      auto_block_threshold: 0.92
+    soar:
+      enabled: true
+      auto_isolate: false   # Require human approval for network isolation
+      auto_quarantine: true  # Auto-quarantine malicious files
+    siem:
+      kafka_enabled: false
+      syslog_enabled: true
+      syslog_addr: "siem:514"
+    tls:
+      enabled: true
+      ca_cert: /etc/thor/tls/ca.crt
+      cert: /etc/thor/tls/agent.crt
+      key: /etc/thor/tls/agent.key
+
+  # Logging configuration (JSON structured logs)
+  logging.toml: |
+    [logging]
+    level = "info"
+    format = "json"
+    output = "stdout"
+    add_source = true
+    [logging.fields]
+    service = "thor-agent"
+    version = "0.3.0"
+
+---
+# ─── ServiceMonitor for Prometheus Operator ───────────────────────────────────
+# Requires: prometheus-operator CRD installed
+# Usage: kubectl apply -f k8s/thor-configmap.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: thor-agents
+  namespace: thor-firewall
+  labels:
+    app.kubernetes.io/name: thor-firewall
+    release: prometheus  # Must match Prometheus Operator's serviceMonitorSelector
+spec:
+  namespaceSelector:
+    matchNames:
+      - thor-firewall
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: thor-firewall
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 10s
+      scrapeTimeout: 8s
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+          targetLabel: component
