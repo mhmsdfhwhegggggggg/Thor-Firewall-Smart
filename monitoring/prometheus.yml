@@ -1,13 +1,156 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Prometheus Configuration (Production)
+# Scrapes all Thor agents + infrastructure services
+# ═══════════════════════════════════════════════════════════════════════════════
+
 global:
-  scrape_interval: 15s
+  scrape_interval:     15s
   evaluation_interval: 15s
+  scrape_timeout:      10s
+  external_labels:
+    cluster: 'thor-production'
+    environment: 'prod'
+
+# Load alerting rules from rules file
+rule_files:
+  - /etc/prometheus/rules/*.yml
+  - /etc/prometheus/rules/*.yaml
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+      timeout: 10s
+      api_version: v2
 
 scrape_configs:
+
+  # ─── Thor Control Plane ───────────────────────────────────────────────────────
   - job_name: 'thor-control-plane'
     static_configs:
       - targets: ['thor-control-server:9090']
     metrics_path: /metrics
+    scrape_interval: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: component
+        replacement: control-plane
 
+  # ─── Thor SOC Engine ──────────────────────────────────────────────────────────
+  - job_name: 'thor-soc-slm'
+    static_configs:
+      - targets: ['thor-soc-slm:9090']
+    metrics_path: /metrics
+    scrape_interval: 10s
+    relabel_configs:
+      - target_label: component
+        replacement: soc-engine
+
+  # ─── Thor Network Agent (L3/L4 XDP) ──────────────────────────────────────────
+  - job_name: 'thor-agent-net'
+    static_configs:
+      - targets: ['thor-agent-net:9091']
+    metrics_path: /metrics
+    scrape_interval: 5s   # High frequency — XDP metrics change fast
+    relabel_configs:
+      - target_label: component
+        replacement: agent-net
+
+  # ─── Thor WAF Agent (L7) ──────────────────────────────────────────────────────
+  - job_name: 'thor-agent-web'
+    static_configs:
+      - targets: ['thor-agent-web:9092']
+    metrics_path: /metrics
+    scrape_interval: 5s
+    relabel_configs:
+      - target_label: component
+        replacement: agent-web
+
+  # ─── Thor EDR Server Agent ────────────────────────────────────────────────────
+  - job_name: 'thor-agent-srv'
+    static_configs:
+      - targets: ['thor-agent-srv:9093']
+    metrics_path: /metrics
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: component
+        replacement: agent-srv
+
+  # ─── Thor Monolithic Agent (legacy) ───────────────────────────────────────────
+  - job_name: 'thor-agent'
+    static_configs:
+      - targets: ['thor-agent-1:9090', 'thor-agent-2:9090']
+    metrics_path: /metrics
+    scrape_interval: 10s
+    relabel_configs:
+      - target_label: component
+        replacement: agent-monolith
+
+  # ─── PostgreSQL (postgres_exporter) ───────────────────────────────────────────
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    relabel_configs:
+      - target_label: component
+        replacement: database
+
+  # ─── Redis ────────────────────────────────────────────────────────────────────
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    relabel_configs:
+      - target_label: component
+        replacement: cache
+
+  # ─── Kafka ────────────────────────────────────────────────────────────────────
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-1:9308', 'kafka-2:9308', 'kafka-3:9308']
+    relabel_configs:
+      - target_label: component
+        replacement: kafka
+
+  # ─── Node Exporter (host metrics) ─────────────────────────────────────────────
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    relabel_configs:
+      - target_label: component
+        replacement: host
+
+  # ─── Jaeger ───────────────────────────────────────────────────────────────────
   - job_name: 'jaeger'
     static_configs:
       - targets: ['jaeger:14269']
+
+  # ─── NGINX (nginx_exporter) ───────────────────────────────────────────────────
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+
+  # ─── Prometheus self-scrape ───────────────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ─── Kubernetes service discovery (when running in K8s) ──────────────────────
+  # Uncomment when deploying to Kubernetes with Prometheus Operator
+  # - job_name: 'kubernetes-pods'
+  #   kubernetes_sd_configs:
+  #     - role: pod
+  #   relabel_configs:
+  #     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+  #       action: keep
+  #       regex: true
+  #     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+  #       action: replace
+  #       target_label: __metrics_path__
+  #       regex: (.+)
+  #     - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+  #       action: replace
+  #       regex: ([^:]+)(?::\d+)?;(\d+)
+  #       replacement: $1:$2
+  #       target_label: __address__
