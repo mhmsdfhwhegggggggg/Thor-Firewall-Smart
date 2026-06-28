@@ -20,7 +20,7 @@ jobs:
     name: Security Audit (cargo-audit + cargo-deny)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -36,7 +36,7 @@ jobs:
     name: Lint & Format (clippy + rustfmt)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -60,7 +60,7 @@ jobs:
       matrix:
         rust: [stable, beta]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@${{ matrix.rust }}
       - uses: Swatinem/rust-cache@v2
       - name: Install system dependencies
@@ -80,7 +80,7 @@ jobs:
           cargo install cargo-nextest --locked
           cargo nextest run --all-packages --no-fail-fast
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results-${{ matrix.rust }}
@@ -91,7 +91,7 @@ jobs:
     name: eBPF Programs (BPF CO-RE)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install eBPF toolchain
         run: |
           sudo apt-get update
@@ -138,7 +138,7 @@ jobs:
         ports: ["5432:5432"]
         options: --health-cmd pg_isready --health-interval 10s
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Setup test environment
@@ -159,7 +159,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.event_name == 'schedule'  # Only on nightly
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz
@@ -171,7 +171,7 @@ jobs:
           timeout 120 cargo +nightly fuzz run fuzz_xai_engine -- -max_total_time=100 || true
         continue-on-error: true
       - name: Upload fuzz artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: fuzz-crashes
@@ -183,7 +183,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run detection benchmarks
@@ -195,7 +195,7 @@ jobs:
           # Store baseline in CI artifacts for comparison
           cat benchmark_output.txt | grep "test.*bench:" | head -20
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks
           path: benchmark_output.txt
@@ -207,7 +207,7 @@ jobs:
     needs: [unit-tests, lint]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build Docker image
         run: |
           docker build -f docker/Dockerfile.agent \
@@ -223,7 +223,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -234,7 +234,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [unit-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-cyclonedx
         run: cargo install cargo-cyclonedx
@@ -243,7 +243,7 @@ jobs:
           cargo cyclonedx --format json --output sbom.cdx.json
           echo "SBOM generated: $(wc -l sbom.cdx.json) lines"
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-${{ github.sha }}
           path: sbom.cdx.json
@@ -255,7 +255,7 @@ jobs:
     needs: [unit-tests, docker]
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run compliance test
         run: |
           cargo test compliance_report_generation --package thor-agent \

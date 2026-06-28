@@ -28,7 +28,7 @@ jobs:
     name: Cargo Audit (CVE Scan)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install cargo-audit
@@ -42,7 +42,7 @@ jobs:
             2>&1 | tee cargo-audit-report.txt
       - name: Upload audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cargo-audit-report
           path: cargo-audit-report.txt
@@ -53,7 +53,7 @@ jobs:
     name: Cargo Deny (License + Banned)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked --version "^0.14"
       - name: Check licenses and banned dependencies
@@ -64,7 +64,7 @@ jobs:
     name: Secrets Scan (TruffleHog)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: TruffleHog scan
@@ -82,7 +82,7 @@ jobs:
     needs: cargo-audit
     if: github.event_name != 'schedule'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build Docker image
         run: |
           docker build \
@@ -100,7 +100,7 @@ jobs:
           ignore-unfixed: true
       - name: Upload Trivy SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: "trivy-results.sarif"
 
@@ -110,8 +110,8 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.event_name == 'schedule'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install ML dependencies
@@ -137,8 +137,8 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           deny-licenses: "GPL-2.0, GPL-3.0, AGPL-3.0"
