@@ -1,0 +1,17 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Grafana — Dashboard auto-provisioning
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: 1
+providers:
+  - name: "Thor Firewall Dashboards"
+    orgId: 1
+    folder: "Thor Security"
+    folderUid: "thor-security"
+    type: file
+    disableDeletion: true
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
