@@ -1,0 +1,372 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Web Agent (WAF) + SOC Engine Deployments
+# These run as standard Deployments (NOT DaemonSet — no host network needed)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── Service: thor-agent-web ──────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: thor-agent-web
+  namespace: thor-firewall
+  labels:
+    app.kubernetes.io/name: thor-agent-web
+    app.kubernetes.io/part-of: thor-firewall
+    app.kubernetes.io/component: agent-web
+spec:
+  selector:
+    app: thor-agent-web
+  ports:
+    - name: http
+      port: 8082
+      targetPort: 8082
+    - name: metrics
+      port: 9092
+      targetPort: 9092
+  type: ClusterIP
+
+---
+# ─── Deployment: thor-agent-web (L7 WAF) ──────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thor-agent-web
+  namespace: thor-firewall
+  labels:
+    app.kubernetes.io/name: thor-agent-web
+    app.kubernetes.io/part-of: thor-firewall
+    app.kubernetes.io/component: agent-web
+    app.kubernetes.io/version: "0.3.0"
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: thor-agent-web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Zero-downtime: always bring up new before removing old
+  template:
+    metadata:
+      labels:
+        app: thor-agent-web
+        app.kubernetes.io/name: thor-agent-web
+        app.kubernetes.io/part-of: thor-firewall
+        app.kubernetes.io/component: agent-web
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9092"
+        prometheus.io/path: "/metrics"
+        # Force rolling restart when ConfigMap changes
+        checksum/config: "{{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}"
+    spec:
+      serviceAccountName: thor-agent
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+
+      # ── Security Context ────────────────────────────────────────────────────
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532        # distroless nonroot
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault  # WAF doesn't need custom eBPF seccomp
+        supplementalGroups: []
+
+      # ── Anti-affinity: spread across nodes ────────────────────────────────
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: thor-agent-web
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: thor-agent-web
+          image: ghcr.io/mhmsdfhwhegggggggg/thor/thor-agent-web:0.3.0
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8082
+              protocol: TCP
+            - name: metrics
+              containerPort: 9092
+              protocol: TCP
+
+          # ── Security ──────────────────────────────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_BIND_SERVICE"]
+
+          # ── Resources ─────────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          # ── Config ────────────────────────────────────────────────────────
+          envFrom:
+            - secretRef:
+                name: thor-secrets
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: THOR_AGENT_TYPE
+              value: "web"
+            - name: THOR_API_PORT
+              value: "8082"
+            - name: THOR_METRICS_PORT
+              value: "9092"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
+          volumeMounts:
+            - name: config
+              mountPath: /etc/thor
+              readOnly: true
+            - name: tls
+              mountPath: /etc/thor/tls
+              readOnly: true
+            - name: rules
+              mountPath: /etc/thor/rules
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+
+          # ── Health Probes ──────────────────────────────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 3
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+
+      volumes:
+        - name: config
+          configMap:
+            name: thor-config
+        - name: tls
+          secret:
+            secretName: thor-tls-agent
+            defaultMode: 0400
+        - name: rules
+          configMap:
+            name: thor-rules
+        - name: tmp
+          emptyDir:
+            sizeLimit: 100Mi
+
+---
+# ─── Service: thor-soc-slm ────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: thor-soc-slm
+  namespace: thor-firewall
+  labels:
+    app.kubernetes.io/name: thor-soc-slm
+    app.kubernetes.io/part-of: thor-firewall
+    app.kubernetes.io/component: soc
+spec:
+  selector:
+    app: thor-soc-slm
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+    - name: ws
+      port: 8091
+      targetPort: 8091
+  type: ClusterIP
+
+---
+# ─── Deployment: thor-soc-slm (SOC Control Engine) ───────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thor-soc-slm
+  namespace: thor-firewall
+  labels:
+    app.kubernetes.io/name: thor-soc-slm
+    app.kubernetes.io/part-of: thor-firewall
+    app.kubernetes.io/component: soc
+    app.kubernetes.io/version: "0.3.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: thor-soc-slm
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: thor-soc-slm
+        app.kubernetes.io/name: thor-soc-slm
+        app.kubernetes.io/part-of: thor-firewall
+        app.kubernetes.io/component: soc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: thor-agent
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60  # Longer: SOC needs to finish in-flight decisions
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+
+      # ── Leader election: only 1 active SOC instance ────────────────────────
+      # The SOC uses K8s Lease for leader election when replicas > 1
+      # Non-leader replicas serve read-only traffic (event queries, metrics)
+
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: thor-soc-slm
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: thor-soc-slm
+          image: ghcr.io/mhmsdfhwhegggggggg/thor/thor-soc-slm:0.3.0
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8090
+            - name: metrics
+              containerPort: 9090
+            - name: ws
+              containerPort: 8091
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+
+          envFrom:
+            - secretRef:
+                name: thor-secrets
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: THOR_AGENT_TYPE
+              value: "soc"
+            - name: THOR_API_PORT
+              value: "8090"
+            - name: THOR_METRICS_PORT
+              value: "9090"
+            - name: THOR_WS_PORT
+              value: "8091"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          volumeMounts:
+            - name: config
+              mountPath: /etc/thor
+              readOnly: true
+            - name: tls
+              mountPath: /etc/thor/tls
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: data
+              mountPath: /var/lib/thor
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 2
+
+      volumes:
+        - name: config
+          configMap:
+            name: thor-config
+        - name: tls
+          secret:
+            secretName: thor-tls-agent
+            defaultMode: 0400
+        - name: tmp
+          emptyDir:
+            sizeLimit: 100Mi
+        - name: data
+          emptyDir:
+            sizeLimit: 5Gi
