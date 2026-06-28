@@ -1,0 +1,38 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — CODEOWNERS
+# ═══════════════════════════════════════════════════════════════════════════════
+# Automatically requests review from appropriate owners on every PR.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default — all files
+*                                       @mhmsdfhwhegggggggg
+
+# ── Core shared library ─────────────────────────────────────────────────────
+crates/thor-common/                     @mhmsdfhwhegggggggg
+crates/thor-bpf/                        @mhmsdfhwhegggggggg
+crates/thor-xdp*/                       @mhmsdfhwhegggggggg
+
+# ── Detection engines ────────────────────────────────────────────────────────
+crates/thor-ids/                        @mhmsdfhwhegggggggg
+crates/thor-script/                     @mhmsdfhwhegggggggg
+rules/                                  @mhmsdfhwhegggggggg
+
+# ── Agent crates ─────────────────────────────────────────────────────────────
+crates/thor-agent*/                     @mhmsdfhwhegggggggg
+crates/thor-soc-slm/                    @mhmsdfhwhegggggggg
+
+# ── Infrastructure ───────────────────────────────────────────────────────────
+.github/                                @mhmsdfhwhegggggggg
+k8s/                                    @mhmsdfhwhegggggggg
+helm/                                   @mhmsdfhwhegggggggg
+docker-compose*.yml                     @mhmsdfhwhegggggggg
+Dockerfile*                             @mhmsdfhwhegggggggg
+
+# ── ML models ────────────────────────────────────────────────────────────────
+ml/                                     @mhmsdfhwhegggggggg
+models/                                 @mhmsdfhwhegggggggg
+scripts/*train*.py                      @mhmsdfhwhegggggggg
+
+# ── Security policy ─────────────────────────────────────────────────────────
+SECURITY.md                             @mhmsdfhwhegggggggg
+deny.toml                               @mhmsdfhwhegggggggg
