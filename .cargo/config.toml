@@ -1,11 +1,54 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Cargo Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+
 [build]
-target-dir = "target"
+target-dir    = "target"
+# Parallel codegen for dev builds (overridden to 1 in release profile)
+jobs          = 8
 
+# ─── x86_64 Linux (primary target) ───────────────────────────────────────────
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",          # LLD linker (much faster than ld)
+    "-C", "target-cpu=native",               # Optimize for host CPU (dev builds)
+    "-C", "target-feature=+avx2,+aes,+sse4.2",  # Enable SIMD for crypto + pattern matching
+    "-Z", "share-generics=y",                # Reduce binary size by sharing monomorphizations
+]
+linker = "clang"
 
+# ─── aarch64 Linux (ARM64 — AWS Graviton, Apple M-series servers) ───────────
+[target.aarch64-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-fuse-ld=lld",
+    "-C", "target-cpu=native",
+    "-C", "target-feature=+neon,+aes,+sha2",
+]
+linker = "aarch64-linux-gnu-gcc"
+
+# ─── eBPF kernel target ───────────────────────────────────────────────────────
 [target.bpfel-unknown-none]
 rustflags = [
-    "-C", "target-cpu=v3",
-    "-C", "no-redzone=y",
+    "-C", "target-cpu=v3",                   # eBPF ISA version 3 (kernel 5.4+)
+    "-C", "no-redzone=y",                    # Required for eBPF
+    "-C", "opt-level=2",                     # Balance size vs performance in kernel
+    "-C", "overflow-checks=n",
 ]
+
+# ─── CI/CD environment optimizations ─────────────────────────────────────────
+[env]
+# Set in CI via env vars — defaults shown here
+CARGO_INCREMENTAL    = "0"              # Disable incremental in CI (breaks caching)
+CARGO_NET_RETRY      = "10"            # Retry network ops on flaky registry
+CARGO_REGISTRIES_CRATES_IO_PROTOCOL = "sparse"  # Faster registry access
+
+# ─── Aliases ──────────────────────────────────────────────────────────────────
+[alias]
+# Build all user-space agents for release
+build-prod = "build --release -p thor-agent -p thor-agent-net -p thor-agent-web -p thor-agent-srv -p thor-soc-slm"
+# Run all non-eBPF tests
+test-all = "test --lib -p thor-common -p thor-script -p thor-ids -- --nocapture"
+# Clippy on everything user-space
+lint-all = "clippy -p thor-common -p thor-agent-net -p thor-agent-web -p thor-agent-srv -p thor-soc-slm -p thor-ids -- -D warnings"
+# Size report
+bloat = "bloat --release --crates -p thor-agent"
