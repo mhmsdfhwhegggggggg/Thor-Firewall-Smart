@@ -1,0 +1,23 @@
+apiVersion: v2
+name: thor-firewall
+description: Thor Firewall Smart — Production-grade eBPF/XDP cybersecurity platform
+type: application
+version: 0.3.0
+appVersion: "0.3.0"
+keywords:
+  - security
+  - firewall
+  - ebpf
+  - xdp
+  - waf
+  - idsips
+  - soar
+home: https://github.com/mhmsdfhwhegggggggg/Thor-Firewall-Smart
+sources:
+  - https://github.com/mhmsdfhwhegggggggg/Thor-Firewall-Smart
+maintainers:
+  - name: Thor Security Team
+    email: security@thor-firewall.io
+icon: https://raw.githubusercontent.com/mhmsdfhwhegggggggg/Thor-Firewall-Smart/main/docs/logo.png
+annotations:
+  category: Security
