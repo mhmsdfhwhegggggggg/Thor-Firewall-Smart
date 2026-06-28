@@ -1,0 +1,173 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Helm values
+# ═══════════════════════════════════════════════════════════════════════════════
+
+global:
+  registry: ghcr.io/mhmsdfhwhegggggggg
+  tag: "0.3.0"
+  imagePullPolicy: IfNotPresent
+  ## Reference to existing secret with THOR_JWT_SECRET, DB creds, etc.
+  existingSecret: ""
+
+# ─── thor-soc-slm (SOC Engine — Control Plane) ───────────────────────────────
+soc:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/mhmsdfhwhegggggggg/thor/thor-soc-slm
+    tag: ""          # defaults to global.tag
+  service:
+    type: ClusterIP
+    port: 8090
+    metricsPort: 9090
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+
+# ─── thor-agent-net (L3/L4 XDP Network Agent) ────────────────────────────────
+agentNet:
+  enabled: true
+  replicaCount: 1          # DaemonSet-style; set to null for DS
+  daemonSet: false
+  image:
+    repository: ghcr.io/mhmsdfhwhegggggggg/thor/thor-agent-net
+    tag: ""
+  hostNetwork: true        # Required for XDP
+  privileged: true         # Required for eBPF
+  service:
+    type: ClusterIP
+    port: 8081
+    metricsPort: 9091
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "512Mi"
+    limits:
+      cpu: "4000m"
+      memory: "4Gi"
+
+# ─── thor-agent-web (L7 WAF) ─────────────────────────────────────────────────
+agentWeb:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: ghcr.io/mhmsdfhwhegggggggg/thor/thor-agent-web
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8082
+    metricsPort: 9092
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 60
+
+# ─── thor-agent-srv (EDR Server Agent) ───────────────────────────────────────
+agentSrv:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/mhmsdfhwhegggggggg/thor/thor-agent-srv
+    tag: ""
+  service:
+    type: ClusterIP
+    port: 8083
+    metricsPort: 9093
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+# ─── PostgreSQL ───────────────────────────────────────────────────────────────
+postgresql:
+  enabled: true
+  auth:
+    username: thor
+    database: thor_control
+    existingSecret: thor-db-secret
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "2000m"
+        memory: "4Gi"
+
+# ─── Redis ────────────────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  auth:
+    existingSecret: thor-redis-secret
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# ─── Kafka ────────────────────────────────────────────────────────────────────
+kafka:
+  enabled: false           # Enable for high-throughput deployments
+  replicaCount: 3
+
+# ─── Monitoring ───────────────────────────────────────────────────────────────
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 15s
+  grafana:
+    enabled: true
+    dashboards:
+      enabled: true
+
+# ─── Ingress ──────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: thor.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: thor-tls
+      hosts:
+        - thor.example.com
