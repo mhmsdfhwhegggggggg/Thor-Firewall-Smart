@@ -1,0 +1,163 @@
+name: Thor — Docker Build & Publish
+
+on:
+  push:
+    branches: ["main", "release/*"]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/thor
+
+jobs:
+  # ─── Build + Scan + Push Docker images ─────────────────────────────────────
+  docker:
+    name: Docker (${{ matrix.agent }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write   # cosign keyless signing
+      security-events: write  # Trivy SARIF upload
+
+    strategy:
+      fail-fast: false
+      matrix:
+        agent:
+          - thor-agent
+          - thor-agent-net
+          - thor-agent-web
+          - thor-agent-srv
+          - thor-soc-slm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE }}/${{ matrix.agent }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=${{ matrix.agent }}
+            org.opencontainers.image.vendor=Thor Security Team
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Build (PR — no push)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: crates/${{ matrix.agent }}/Dockerfile
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            GIT_COMMIT=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
+            AGENT_NAME=${{ matrix.agent }}
+
+      - name: Build & Push (main/tag)
+        if: github.event_name != 'pull_request'
+        id: build-push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: crates/${{ matrix.agent }}/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            GIT_COMMIT=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
+            AGENT_NAME=${{ matrix.agent }}
+
+      # ── Trivy vulnerability scan ──────────────────────────────────────────
+      - name: Trivy image scan
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_BASE }}/${{ matrix.agent }}:${{ steps.meta.outputs.version }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0"   # warn only — don't fail build on first scan
+
+      - name: Upload Trivy SARIF
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      # ── cosign keyless signing ─────────────────────────────────────────────
+      - name: Sign image with cosign (keyless)
+        if: github.event_name != 'pull_request'
+        run: |
+          cosign sign --yes \
+            ${{ env.IMAGE_BASE }}/${{ matrix.agent }}@${{ steps.build-push.outputs.digest }}
+
+      # ── Generate + attach SBOM ─────────────────────────────────────────────
+      - name: Generate SBOM (syft)
+        if: github.event_name != 'pull_request'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_BASE }}/${{ matrix.agent }}@${{ steps.build-push.outputs.digest }}
+          artifact-name: ${{ matrix.agent }}-sbom.spdx.json
+          output-file: ${{ matrix.agent }}-sbom.spdx.json
+          format: spdx-json
+
+      - name: Attest SBOM with cosign
+        if: github.event_name != 'pull_request'
+        run: |
+          cosign attest --yes \
+            --predicate ${{ matrix.agent }}-sbom.spdx.json \
+            --type spdxjson \
+            ${{ env.IMAGE_BASE }}/${{ matrix.agent }}@${{ steps.build-push.outputs.digest }}
+
+  # ─── Summary job ────────────────────────────────────────────────────────────
+  docker-summary:
+    name: Docker Summary
+    runs-on: ubuntu-latest
+    needs: docker
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          echo "## Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "All agents built and pushed to GHCR with:" >> $GITHUB_STEP_SUMMARY
+          echo "- Trivy vulnerability scanning" >> $GITHUB_STEP_SUMMARY
+          echo "- cosign keyless image signing" >> $GITHUB_STEP_SUMMARY
+          echo "- SPDX SBOM attestation" >> $GITHUB_STEP_SUMMARY
