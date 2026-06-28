@@ -1,0 +1,136 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Thor Firewall Smart — Vector Log Aggregation Pipeline
+# Collects structured JSON logs from all Thor agents and routes to SIEM
+# ═══════════════════════════════════════════════════════════════════════════════
+# Install: https://vector.dev
+# Run: vector --config configs/vector.toml
+# ═══════════════════════════════════════════════════════════════════════════════
+
+[api]
+enabled = true
+address = "0.0.0.0:8686"
+
+# ─── Sources ─────────────────────────────────────────────────────────────────
+
+# Collect from Docker container logs (dev/compose)
+[sources.docker_logs]
+type = "docker_logs"
+include_containers = [
+    "thor-agent-1", "thor-agent-2",
+    "thor-agent-net", "thor-agent-web",
+    "thor-agent-srv", "thor-soc-slm"
+]
+partially_merged_lines_limit = 100
+
+# Collect from journald (systemd service mode)
+[sources.journald]
+type = "journald"
+include_units = ["thor-agent.service", "thor-soc.service"]
+
+# Collect from Kubernetes pod logs (K8s mode)
+# Uncomment when running in K8s with Vector DaemonSet
+# [sources.kubernetes_logs]
+# type = "kubernetes_logs"
+# extra_label_selector = "app.kubernetes.io/part-of=thor-firewall"
+# include_paths_glob_patterns = ["/var/log/containers/thor-*.log"]
+
+# File source (fallback / testing)
+[sources.file_logs]
+type = "file"
+include = ["/var/log/thor/*.log", "/var/lib/thor/logs/*.json"]
+read_from = "beginning"
+encoding.codec = "json"
+
+# ─── Transforms ──────────────────────────────────────────────────────────────
+
+# Parse JSON structured logs from Thor agents
+[transforms.parse_thor]
+type   = "remap"
+inputs = ["docker_logs", "journald", "file_logs"]
+source = '''
+  # Ensure all required fields exist
+  .timestamp     = to_timestamp!(.timestamp ?? .ts ?? now(), unit: "seconds")
+  .level         = downcase(string!(.level ?? .severity ?? "info"))
+  .service       = string!(.service ?? .fields.service ?? "thor-unknown")
+  .message       = string!(.message ?? .msg ?? "")
+
+  # Security event enrichment
+  if exists(.threat_level) {
+    .security_event = true
+    .mitre_tactic   = .mitre_tactic ?? "unknown"
+    .mitre_technique = .mitre_technique ?? "unknown"
+  } else {
+    .security_event = false
+  }
+
+  # Normalize IP fields
+  if exists(.src_ip) { .src_ip = to_string!(.src_ip) }
+  if exists(.dst_ip) { .dst_ip = to_string!(.dst_ip) }
+
+  # Add environment metadata
+  .environment = get_env_var!("THOR_ENVIRONMENT") ?? "production"
+  .cluster     = get_env_var!("THOR_CLUSTER") ?? "default"
+'''
+
+# Separate critical security events for real-time alerting
+[transforms.security_events]
+type   = "filter"
+inputs = ["parse_thor"]
+condition = '.security_event == true && (.threat_level == "critical" || .threat_level == "high")'
+
+# General operational logs
+[transforms.operational_logs]
+type   = "filter"
+inputs = ["parse_thor"]
+condition = '.security_event != true'
+
+# ─── Sinks ───────────────────────────────────────────────────────────────────
+
+# Elasticsearch / OpenSearch (primary SIEM backend)
+[sinks.elasticsearch]
+type    = "elasticsearch"
+inputs  = ["parse_thor"]
+endpoints = ["${ELASTICSEARCH_URL:-http://elasticsearch:9200}"]
+index   = "thor-logs-%Y.%m.%d"
+compression = "gzip"
+bulk.action = "create"
+auth.strategy = "basic"
+auth.user     = "${ELASTICSEARCH_USER:-elastic}"
+auth.password = "${ELASTICSEARCH_PASSWORD}"
+tls.verify_certificate = true
+
+# Kafka (high-throughput SIEM forwarding)
+[sinks.kafka]
+type    = "kafka"
+inputs  = ["security_events"]
+bootstrap_servers = "${THOR_KAFKA_BROKERS:-kafka:9092}"
+topic   = "thor.security-events"
+compression = "lz4"
+encoding.codec = "json"
+batch.max_events = 500
+buffer.type = "disk"
+buffer.max_size = 268435456  # 256 MiB disk buffer
+
+# Prometheus (metrics from logs)
+[sinks.prometheus]
+type    = "prometheus_exporter"
+inputs  = ["parse_thor"]
+address = "0.0.0.0:9598"
+
+# Local file archive (compliance / forensics)
+[sinks.archive]
+type    = "file"
+inputs  = ["security_events"]
+path    = "/var/log/thor/security-archive/%Y/%m/%d/events.json.gz"
+encoding.codec = "json"
+compression = "gzip"
+buffer.type = "disk"
+buffer.max_size = 1073741824  # 1 GiB
+
+# Stdout (debug mode)
+[sinks.console]
+type    = "console"
+inputs  = ["parse_thor"]
+encoding.codec = "json"
+# Comment out in production:
+# target = "stderr"
